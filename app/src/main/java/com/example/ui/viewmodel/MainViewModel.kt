@@ -1,0 +1,365 @@
+package com.example.ui.viewmodel
+
+import android.app.Application
+import android.content.Context
+import android.widget.Toast
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.AetherApp
+import com.example.data.model.Track
+import com.example.data.preferences.AetherSettings
+import com.example.data.repository.AlbumGroup
+import com.example.data.repository.ArtistGroup
+import com.example.data.repository.FolderGroup
+import com.example.player.PlaybackState
+import com.example.player.RepeatMode
+import com.example.service.MusicPlaybackService
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+
+class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val app = application as AetherApp
+    private val audioRepository = app.audioRepository
+    private val playerEngine = app.playerEngine
+    private val settingsManager = app.settingsManager
+
+    val playbackState: StateFlow<PlaybackState> = playerEngine.playbackState
+
+    val settings: StateFlow<AetherSettings> = settingsManager.settingsFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AetherSettings()
+    )
+
+    val allTracks: StateFlow<List<Track>> = audioRepository.allTracks.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val recentTracks: StateFlow<List<Track>> = audioRepository.recentTracks.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val tracksByDuration: StateFlow<List<Track>> = audioRepository.tracksByDuration.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val artistGroups: StateFlow<List<ArtistGroup>> = audioRepository.artistGroups.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val albumGroups: StateFlow<List<AlbumGroup>> = audioRepository.albumGroups.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val folderGroups: StateFlow<List<FolderGroup>> = audioRepository.folderGroups.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val playbackHistory: StateFlow<List<Track>> = audioRepository.playbackHistory.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val trackCount: StateFlow<Int> = audioRepository.trackCount.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val artistCount: StateFlow<Int> = audioRepository.artistCount.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val albumCount: StateFlow<Int> = audioRepository.albumCount.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val folderCount: StateFlow<Int> = audioRepository.folderCount.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val searchResults: StateFlow<List<Track>> = _searchQuery.flatMapLatest { query ->
+        if (query.isBlank()) {
+            flowOf(emptyList())
+        } else {
+            audioRepository.searchTracks(query)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
+
+    private val _scanMessage = MutableStateFlow<String?>(null)
+    val scanMessage: StateFlow<String?> = _scanMessage.asStateFlow()
+
+    // Double back-press tracking
+    private var lastBackPressTime = 0L
+
+    fun onSearchQueryChanged(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun clearSearch() {
+        _searchQuery.value = ""
+    }
+
+    fun playTrack(track: Track, tracks: List<Track> = emptyList()) {
+        if (tracks.isNotEmpty()) {
+            val index = tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+            playerEngine.playTrackList(tracks, index)
+        } else {
+            playerEngine.playTrack(track)
+        }
+        MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
+    }
+
+    fun playTrackList(tracks: List<Track>, index: Int = 0) {
+        playerEngine.playTrackList(tracks, index)
+        MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
+    }
+
+    fun playTrackAtIndex(index: Int) {
+        playerEngine.playQueueIndex(index)
+        MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
+    }
+
+    fun playNext(track: Track) {
+        playerEngine.playNext(track)
+    }
+
+    fun addToQueue(track: Track) {
+        playerEngine.addToQueue(track)
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        playerEngine.setQueue(
+            playerEngine.playbackState.value.queue.toMutableList().apply {
+                if (fromIndex in indices && toIndex in indices) {
+                    val item = removeAt(fromIndex)
+                    add(toIndex, item)
+                }
+            },
+            playerEngine.playbackState.value.currentQueueIndex
+        )
+    }
+
+    fun removeFromQueue(index: Int) {
+        playerEngine.removeQueueItem(index)
+    }
+
+    fun clearQueue() {
+        playerEngine.setQueue(emptyList(), 0)
+        playerEngine.pause()
+    }
+
+    fun shuffleAll(tracks: List<Track>) {
+        if (tracks.isEmpty()) return
+        val shuffled = tracks.shuffled()
+        playerEngine.setShuffle(true)
+        playerEngine.playTrackList(shuffled, 0)
+        MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
+    }
+
+    fun togglePlayPause() {
+        playerEngine.togglePlayPause()
+        if (playerEngine.playbackState.value.isPlaying) {
+            MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
+        }
+    }
+
+    fun next() {
+        playerEngine.next()
+    }
+
+    fun previous() {
+        playerEngine.previous()
+    }
+
+    fun seekTo(positionMs: Long) {
+        playerEngine.seekTo(positionMs)
+    }
+
+    fun setShuffle(enabled: Boolean) {
+        playerEngine.setShuffle(enabled)
+    }
+
+    fun toggleShuffle() {
+        playerEngine.setShuffle(!playerEngine.playbackState.value.isShuffle)
+    }
+
+    fun toggleRepeat() {
+        playerEngine.toggleRepeatMode()
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        playerEngine.setPlaybackSpeed(speed)
+    }
+
+    fun updatePlaybackSpeed(speed: Float) {
+        playerEngine.setPlaybackSpeed(speed)
+    }
+
+    fun updateEqualizerPreset(preset: String) {
+        val presetIndex = when (preset) {
+            "Bass Boost" -> 1
+            "Electronic", "Cyber Synth" -> 2
+            "Vocal" -> 3
+            "Rock" -> 4
+            else -> 0
+        }
+        viewModelScope.launch {
+            settingsManager.updateEqualizer(autoSpectral = true, preset = presetIndex)
+        }
+    }
+
+    fun rescanLibrary(context: Context) {
+        viewModelScope.launch {
+            _isScanning.value = true
+            _scanMessage.value = "Indexation des fichiers audio sécurisés..."
+            val count = audioRepository.rescanLibrary()
+            _isScanning.value = false
+            val msg = if (count > 0) {
+                "$count pistes indexées (Audios WhatsApp exclus)"
+            } else {
+                "Aucune piste trouvée sur le stockage (Fichiers WhatsApp exclus)"
+            }
+            _scanMessage.value = msg
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun clearScanMessage() {
+        _scanMessage.value = null
+    }
+
+    // Settings actions
+    fun updateCrossfadeEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            val current = settings.value
+            settingsManager.updateCrossfade(enabled, current.crossfadeDuration, current.crossfadeCurve)
+        }
+    }
+
+    fun updateCrossfadeDuration(durationSec: Int) {
+        viewModelScope.launch {
+            val current = settings.value
+            settingsManager.updateCrossfade(current.crossfadeEnabled, durationSec.toFloat(), current.crossfadeCurve)
+        }
+    }
+
+    fun updateGaplessPlayback(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.updateGapless(enabled) }
+    }
+
+    fun updatePauseOnUnplug(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.updateAutoResume(enabled) }
+    }
+
+    fun updateResumeOnHeadsetPlug(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.updateAutoResume(enabled) }
+    }
+
+    fun updateExcludeWhatsApp(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.updateWhatsAppExclusion(enabled) }
+    }
+
+    fun updateExcludeRecordings(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.updateWhatsAppExclusion(enabled) }
+    }
+
+    fun updateMinDurationSec(seconds: Int) {
+        // Updated in repository filter if needed
+    }
+
+    fun updateThemePreference(pref: String) {
+        viewModelScope.launch { settingsManager.updateTheme(pref) }
+    }
+
+    fun updateVisualizerStyle(style: String) {
+        viewModelScope.launch { settingsManager.updateAnimationLevel(style) }
+    }
+
+    fun updateFluidAnimations(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.updateAnimationLevel(if (enabled) "MAXIMUM" else "MINIMAL") }
+    }
+
+    fun updateBatterySaverMode(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.updateBatterySaver(enabled) }
+    }
+
+    fun updateBackgroundPersistence(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.updateAutoResume(enabled) }
+    }
+
+    fun resetSettings() {
+        viewModelScope.launch {
+            settingsManager.resetAllPlaybackData()
+        }
+    }
+
+    fun resetAllData(context: Context) {
+        viewModelScope.launch {
+            audioRepository.clearAllData()
+            playerEngine.pause()
+            MusicPlaybackService.stopService(context)
+            Toast.makeText(context, "Données et bibliothèque réinitialisées", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * Handles double back-press from Home screen.
+     * Returns true if application should close immediately and stop playback notification.
+     */
+    fun handleHomeBackPress(context: Context, onExitApp: () -> Unit): Boolean {
+        val currentTime = System.currentTimeMillis()
+        val delay = settings.value.doubleBackExitDelayMs
+
+        if (currentTime - lastBackPressTime < delay) {
+            // Second press within delay window -> Exit app and dismiss notification!
+            MusicPlaybackService.stopService(context)
+            playerEngine.pause()
+            onExitApp()
+            return true
+        } else {
+            // First press -> show toast prompt
+            lastBackPressTime = currentTime
+            Toast.makeText(context, "Appuyez à nouveau pour quitter", Toast.LENGTH_SHORT).show()
+            return false
+        }
+    }
+}

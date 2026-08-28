@@ -1,0 +1,6 @@
+{
+  "name": "Aether Music",
+  "description": "Lecteur de musique futuriste haut de gamme, fluide et précis sans IA générative.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
