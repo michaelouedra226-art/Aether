@@ -209,7 +209,7 @@ fun NowPlayingMiniBar(
                     modifier = Modifier
                         .fillMaxWidth(progress)
                         .height(2.5.dp)
-                        .background(SpotifyGreen)
+                        .background(com.example.ui.theme.PremiumAccentGradient)
                 )
             }
         }

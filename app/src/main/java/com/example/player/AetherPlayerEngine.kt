@@ -132,9 +132,19 @@ class AetherPlayerEngine(
             }
         }
 
-        // Restore last playback state
+        // Restore last playback state with validation
         scope.launch {
             restoreLastPlaybackSession()
+        }
+    }
+
+    private fun isTrackAccessible(track: Track): Boolean {
+        return try {
+            val file = java.io.File(track.path)
+            if (file.exists() && file.length() > 0) return true
+            context.contentResolver.openAssetFileDescriptor(track.uri, "r")?.use { true } ?: false
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -142,26 +152,32 @@ class AetherPlayerEngine(
         val settings = settingsManager.settingsFlow.first()
         if (settings.lastTrackId != -1L) {
             val track = audioRepository.getTrackById(settings.lastTrackId)
-            val queueIds = if (settings.lastQueueIds.isNotEmpty()) {
-                settings.lastQueueIds.split(",").mapNotNull { it.toLongOrNull() }
-            } else emptyList()
+            if (track != null && isTrackAccessible(track)) {
+                val queueIds = if (settings.lastQueueIds.isNotEmpty()) {
+                    settings.lastQueueIds.split(",").mapNotNull { it.toLongOrNull() }
+                } else emptyList()
 
-            val queue = if (queueIds.isNotEmpty()) {
-                audioRepository.getTracksByIds(queueIds)
-            } else if (track != null) {
-                listOf(track)
-            } else emptyList()
+                val rawQueue = if (queueIds.isNotEmpty()) {
+                    audioRepository.getTracksByIds(queueIds)
+                } else {
+                    listOf(track)
+                }
+                val validQueue = rawQueue.filter { isTrackAccessible(it) }.ifEmpty { listOf(track) }
 
-            if (track != null) {
+                val validIndex = settings.lastQueueIndex.coerceIn(0, (validQueue.size - 1).coerceAtLeast(0))
+
                 _playbackState.value = _playbackState.value.copy(
                     currentTrack = track,
                     durationMs = track.durationMs,
-                    currentPositionMs = if (settings.autoResumePosition) settings.lastPositionMs else 0L,
-                    queue = queue,
-                    currentQueueIndex = settings.lastQueueIndex.coerceIn(0, (queue.size - 1).coerceAtLeast(0)),
+                    currentPositionMs = if (settings.autoResumePosition) settings.lastPositionMs.coerceIn(0L, track.durationMs) else 0L,
+                    queue = validQueue,
+                    currentQueueIndex = validIndex,
                     isShuffle = settings.shuffleEnabled,
                     repeatMode = settings.repeatMode
                 )
+            } else {
+                // Track no longer exists or file was moved/deleted - clean up session
+                settingsManager.resetAllPlaybackData()
             }
         }
     }

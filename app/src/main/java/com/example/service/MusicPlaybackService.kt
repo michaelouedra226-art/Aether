@@ -61,6 +61,10 @@ class MusicPlaybackService : Service() {
         super.onCreate()
         initMediaSession()
 
+        // Post immediate minimal notification to comply with Android 8+ foreground service requirements
+        val initialNotification = createInitialNotification()
+        startForeground(AetherApp.NOTIFICATION_ID, initialNotification)
+
         val playerEngine = AetherApp.instance.playerEngine
         serviceScope.launch {
             playerEngine.playbackState.collect { state ->
@@ -69,6 +73,27 @@ class MusicPlaybackService : Service() {
                 }
             }
         }
+    }
+
+    private fun createInitialNotification(): Notification {
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        return NotificationCompat.Builder(this, AetherApp.NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_play_action)
+            .setContentTitle("Aether Music")
+            .setContentText("Prêt pour la lecture")
+            .setContentIntent(contentIntent)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOngoing(false)
+            .setSilent(true)
+            .build()
     }
 
     private fun initMediaSession() {

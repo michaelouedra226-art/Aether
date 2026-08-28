@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -117,7 +118,8 @@ fun HomeScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(SpotifyBlack),
+            .background(SpotifyBlack)
+            .statusBarsPadding(),
         contentPadding = PaddingValues(bottom = 140.dp)
     ) {
         // Sticky Header: Greeting & Quick Action Icons
@@ -125,7 +127,7 @@ fun HomeScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 12.dp, top = 20.dp, bottom = 12.dp),
+                    .padding(start = 16.dp, end = 12.dp, top = 16.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -184,32 +186,6 @@ fun HomeScreen(
                         )
                     }
                 }
-            }
-        }
-
-        // WhatsApp Shield Status Banner (Subtle & Reassuring)
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(SpotifyDarkSurface)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Security,
-                    contentDescription = null,
-                    tint = SpotifyGreen,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Bouclier WhatsApp actif • 100% des notes vocales filtrées",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = TextSecondary
-                )
             }
         }
 
@@ -352,81 +328,6 @@ fun HomeScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
-            }
-
-            // Section: Albums (Horizontal Carousel)
-            if (albumGroups.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "Albums",
-                        onSeeAllClick = onNavigateToLibrary
-                    )
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        items(albumGroups.take(8), key = { "album_${it.albumName}" }) { album ->
-                            SpotifySquareCard(
-                                title = album.albumName,
-                                subtitle = "${album.artist} • ${album.trackCount} titres",
-                                imageModel = album.albumArtUri,
-                                isPlaying = false,
-                                onClick = {
-                                    if (album.tracks.isNotEmpty()) {
-                                        viewModel.playTrack(album.tracks.first(), album.tracks)
-                                    }
-                                }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-            }
-
-            // Section: Artistes (Circular Carousel)
-            if (artistGroups.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "Artistes",
-                        onSeeAllClick = onNavigateToLibrary
-                    )
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(artistGroups.take(8), key = { "artist_${it.artistName}" }) { artist ->
-                            SpotifyArtistCard(
-                                artist = artist,
-                                onClick = {
-                                    if (artist.tracks.isNotEmpty()) {
-                                        viewModel.playTrack(artist.tracks.first(), artist.tracks)
-                                    }
-                                }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-            }
-
-            // Section: Titres (Direct Top List)
-            item {
-                SectionHeader(
-                    title = "Vos titres",
-                    onSeeAllClick = onNavigateToLibrary
-                )
-            }
-
-            items(allTracks.take(8), key = { "home_track_${it.id}" }) { track ->
-                SpotifyTrackRow(
-                    track = track,
-                    isCurrent = playbackState.currentTrack?.id == track.id,
-                    isPlaying = playbackState.currentTrack?.id == track.id && playbackState.isPlaying,
-                    onClick = {
-                        viewModel.playTrack(track, allTracks)
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                )
             }
         }
     }

@@ -59,13 +59,6 @@ sealed class BottomNavItem(
         unselectedIcon = Icons.Outlined.Home
     )
 
-    data object Search : BottomNavItem(
-        route = Screen.Search.route,
-        title = "Recherche",
-        selectedIcon = Icons.Filled.Search,
-        unselectedIcon = Icons.Outlined.Search
-    )
-
     data object Library : BottomNavItem(
         route = Screen.Library.route,
         title = "Bibliothèque",
@@ -82,7 +75,6 @@ fun SpotifyBottomNavigation(
 ) {
     val items = listOf(
         BottomNavItem.Home,
-        BottomNavItem.Search,
         BottomNavItem.Library
     )
 
