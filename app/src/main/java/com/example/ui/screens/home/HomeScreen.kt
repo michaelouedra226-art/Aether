@@ -61,7 +61,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.Track
 import com.example.data.repository.AlbumGroup
 import com.example.data.repository.ArtistGroup
@@ -400,21 +400,28 @@ fun SpotifyQuickCard(
                 .background(SpotifySurfaceHighlight),
             contentAlignment = Alignment.Center
         ) {
-            if (track.albumArtUri != null) {
-                AsyncImage(
-                    model = track.albumArtUri,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = SpotifyGreen,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            SubcomposeAsyncImage(
+                model = track.albumArtUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                error = {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = SpotifyGreen,
+                        modifier = Modifier.size(24.dp)
+                    )
+                },
+                loading = {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = SpotifyGreen.copy(alpha = 0.5f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            )
         }
 
         Spacer(modifier = Modifier.width(10.dp))
@@ -480,21 +487,28 @@ fun SpotifySquareCard(
                 .background(SpotifySurfaceHighlight),
             contentAlignment = Alignment.Center
         ) {
-            if (imageModel != null) {
-                AsyncImage(
-                    model = imageModel,
-                    contentDescription = title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = SpotifyGreen,
-                    modifier = Modifier.size(48.dp)
-                )
-            }
+            SubcomposeAsyncImage(
+                model = imageModel,
+                contentDescription = title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                error = {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = SpotifyGreen,
+                        modifier = Modifier.size(48.dp)
+                    )
+                },
+                loading = {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = SpotifyGreen.copy(alpha = 0.5f),
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -556,21 +570,28 @@ fun SpotifyArtistCard(
                 .background(SpotifyDarkSurface),
             contentAlignment = Alignment.Center
         ) {
-            if (artist.albumArtUri != null) {
-                AsyncImage(
-                    model = artist.albumArtUri,
-                    contentDescription = artist.artistName,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = null,
-                    tint = SpotifyGreen,
-                    modifier = Modifier.size(40.dp)
-                )
-            }
+            SubcomposeAsyncImage(
+                model = artist.albumArtUri,
+                contentDescription = artist.artistName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                error = {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = SpotifyGreen,
+                        modifier = Modifier.size(40.dp)
+                    )
+                },
+                loading = {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = SpotifyGreen.copy(alpha = 0.5f),
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -620,21 +641,28 @@ fun SpotifyTrackRow(
                 .background(SpotifySurfaceHighlight),
             contentAlignment = Alignment.Center
         ) {
-            if (track.albumArtUri != null) {
-                AsyncImage(
-                    model = track.albumArtUri,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = SpotifyGreen,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            SubcomposeAsyncImage(
+                model = track.albumArtUri,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                error = {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = SpotifyGreen,
+                        modifier = Modifier.size(22.dp)
+                    )
+                },
+                loading = {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = SpotifyGreen.copy(alpha = 0.5f),
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            )
         }
 
         Spacer(modifier = Modifier.width(12.dp))

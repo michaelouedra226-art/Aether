@@ -44,7 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.Track
 import com.example.ui.theme.SpotifyBorder
 import com.example.ui.theme.SpotifyDarkSurface
@@ -121,21 +121,28 @@ fun NowPlayingMiniBar(
                         .background(SpotifySurfaceHighlight),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (track.albumArtUri != null) {
-                        AsyncImage(
-                            model = track.albumArtUri,
-                            contentDescription = "Mini Album Art",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.MusicNote,
-                            contentDescription = null,
-                            tint = SpotifyGreen,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    SubcomposeAsyncImage(
+                        model = track.albumArtUri,
+                        contentDescription = "Mini Album Art",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                        error = {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = SpotifyGreen,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        loading = {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = SpotifyGreen.copy(alpha = 0.5f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(12.dp))

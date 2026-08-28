@@ -47,7 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.Track
 import com.example.ui.components.AetherTopAppBar
 import com.example.ui.theme.SpotifyBlack
@@ -109,21 +109,28 @@ fun AlbumDetailScreen(
                             .background(SpotifySurfaceHighlight),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (album?.albumArtUri != null) {
-                            AsyncImage(
-                                model = album.albumArtUri,
-                                contentDescription = albumName,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Album,
-                                contentDescription = null,
-                                tint = SpotifyGreen,
-                                modifier = Modifier.size(72.dp)
-                            )
-                        }
+                        SubcomposeAsyncImage(
+                            model = album?.albumArtUri,
+                            contentDescription = albumName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            error = {
+                                Icon(
+                                    imageVector = Icons.Default.Album,
+                                    contentDescription = null,
+                                    tint = SpotifyGreen,
+                                    modifier = Modifier.size(72.dp)
+                                )
+                            },
+                            loading = {
+                                Icon(
+                                    imageVector = Icons.Default.Album,
+                                    contentDescription = null,
+                                    tint = SpotifyGreen.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(72.dp)
+                                )
+                            }
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))

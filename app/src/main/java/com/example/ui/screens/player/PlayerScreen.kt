@@ -71,7 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.player.RepeatMode
 import com.example.ui.components.FuturisticBadge
 import com.example.ui.components.FuturisticChoiceRow
@@ -231,21 +231,28 @@ fun PlayerScreen(
                     .background(SpotifySurfaceHighlight),
                 contentAlignment = Alignment.Center
             ) {
-                if (currentTrack?.albumArtUri != null) {
-                    AsyncImage(
-                        model = currentTrack.albumArtUri,
-                        contentDescription = currentTrack.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = SpotifyGreen,
-                        modifier = Modifier.size(96.dp)
-                    )
-                }
+                SubcomposeAsyncImage(
+                    model = currentTrack?.albumArtUri,
+                    contentDescription = currentTrack?.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    error = {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = SpotifyGreen,
+                            modifier = Modifier.size(96.dp)
+                        )
+                    },
+                    loading = {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = SpotifyGreen.copy(alpha = 0.5f),
+                            modifier = Modifier.size(96.dp)
+                        )
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))

@@ -66,10 +66,18 @@ class MusicPlaybackService : Service() {
         startForeground(AetherApp.NOTIFICATION_ID, initialNotification)
 
         val playerEngine = AetherApp.instance.playerEngine
+        var lastTrackId: Long? = null
+        var lastIsPlaying: Boolean? = null
+
         serviceScope.launch {
             playerEngine.playbackState.collect { state ->
-                if (state.currentTrack != null) {
-                    updateNotification(state.currentTrack, state.isPlaying, state.currentPositionMs, state.durationMs)
+                val track = state.currentTrack ?: return@collect
+
+                // Update notification ONLY when track changes or play/pause state changes
+                if (track.id != lastTrackId || state.isPlaying != lastIsPlaying) {
+                    lastTrackId = track.id
+                    lastIsPlaying = state.isPlaying
+                    updateNotification(track, state.isPlaying, state.currentPositionMs, state.durationMs)
                 }
             }
         }
@@ -132,7 +140,11 @@ class MusicPlaybackService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val playerEngine = AetherApp.instance.playerEngine
         when (intent?.action) {
-            ACTION_PLAY -> playerEngine.play()
+            ACTION_PLAY -> {
+                if (!playerEngine.playbackState.value.isPlaying) {
+                    playerEngine.play()
+                }
+            }
             ACTION_PAUSE -> playerEngine.pause()
             ACTION_NEXT -> playerEngine.next()
             ACTION_PREVIOUS -> playerEngine.previous()
@@ -187,6 +199,9 @@ class MusicPlaybackService : Service() {
             val playPauseIcon = if (isPlaying) R.drawable.ic_pause_action else R.drawable.ic_play_action
             val playPauseTitle = if (isPlaying) "Pause" else "Lecture"
 
+            val style = androidx.media.app.NotificationCompat.MediaStyle()
+                .setShowActionsInCompactView(0, 1, 2)
+
             val notificationBuilder = NotificationCompat.Builder(this@MusicPlaybackService, AetherApp.NOTIFICATION_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_play_action)
                 .setContentTitle(track.title)
@@ -196,25 +211,21 @@ class MusicPlaybackService : Service() {
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .setOngoing(isPlaying)
                 .setSilent(true)
+                .setOnlyAlertOnce(true)
                 .addAction(R.drawable.ic_prev_action, "Précédent", prevIntent)
                 .addAction(playPauseIcon, playPauseTitle, playPauseIntent)
                 .addAction(R.drawable.ic_next_action, "Suivant", nextIntent)
-                .setStyle(
-                    androidx.media.app.NotificationCompat.MediaStyle()
-                        .setShowActionsInCompactView(0, 1, 2)
-                        .setMediaSession(
-                            mediaSession?.sessionToken?.let { token ->
-                                android.support.v4.media.session.MediaSessionCompat.Token.fromToken(token)
-                            }
-                        )
-                )
+                .setStyle(style)
 
             if (albumBitmap != null) {
                 notificationBuilder.setLargeIcon(albumBitmap)
             }
 
-            val notification = notificationBuilder.build()
-            startForeground(AetherApp.NOTIFICATION_ID, notification)
+            try {
+                startForeground(AetherApp.NOTIFICATION_ID, notificationBuilder.build())
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
