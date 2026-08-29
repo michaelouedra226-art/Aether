@@ -258,7 +258,8 @@ class AetherPlayerEngine(
         _playbackState.value = _playbackState.value.copy(
             currentTrack = targetTrack,
             isPlaying = true,
-            durationMs = targetTrack.durationMs
+            durationMs = targetTrack.durationMs,
+            currentPositionMs = startPosition
         )
 
         startProgressTracking()
@@ -270,58 +271,75 @@ class AetherPlayerEngine(
         }
     }
 
-    private fun startFreshPlayback(track: Track, positionMs: Long) {
-        val old = activePlayer
-        activePlayer = null
-        releasePlayer(old)
+    private fun stopAllPlaybackJobs() {
+        progressTrackingJob?.cancel()
+        progressTrackingJob = null
+        visualizerJob?.cancel()
+        visualizerJob = null
+    }
 
-        val fading = fadingOutPlayer
-        fadingOutPlayer = null
-        releasePlayer(fading)
+    private fun startFreshPlayback(track: Track, positionMs: Long) {
+        // 1. Stopper les jobs d'abord
+        stopAllPlaybackJobs()
+
+        // 2. Réutiliser le même MediaPlayer si possible
+        val player = activePlayer ?: MediaPlayer()
 
         try {
-            val player = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .build()
-                )
-                setDataSource(context, track.uri)
-                setOnErrorListener { _, _, _ ->
-                    _playbackState.value = _playbackState.value.copy(isPlaying = false)
-                    true
-                }
-                prepare()
-                if (positionMs > 0 && positionMs < duration) {
-                    seekTo(positionMs.toInt())
-                }
-                setVolume(1.0f, 1.0f)
-                start()
-                setOnCompletionListener {
-                    handleTrackCompletion()
-                }
+            player.reset()
+        } catch (_: Exception) {
+            releasePlayer(player)
+            activePlayer = MediaPlayer()
+        }
+
+        val p = activePlayer ?: MediaPlayer().also { activePlayer = it }
+
+        try {
+            p.setOnCompletionListener(null)
+            p.setOnErrorListener(null)
+
+            p.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .build()
+            )
+
+            p.setDataSource(context, track.uri)
+
+            p.setOnErrorListener { _, _, _ ->
+                _playbackState.value = _playbackState.value.copy(isPlaying = false)
+                true
             }
-            activePlayer = player
+
+            p.setOnCompletionListener {
+                handleTrackCompletion()
+            }
+
+            p.prepare()
+
+            if (positionMs > 0 && positionMs < p.duration) {
+                p.seekTo(positionMs.toInt())
+            }
+
+            p.setVolume(1.0f, 1.0f)
+            p.start()
+            activePlayer = p
         } catch (e: Exception) {
             e.printStackTrace()
+            releasePlayer(p)
+            activePlayer = null
             _playbackState.value = _playbackState.value.copy(isPlaying = false)
         }
     }
 
     fun pause() {
-        activePlayer?.let { player ->
-            try {
-                if (player.isPlaying) {
-                    player.pause()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
+        try {
+            activePlayer?.let { if (it.isPlaying) it.pause() }
+        } catch (_: Exception) { }
+
         _playbackState.value = _playbackState.value.copy(isPlaying = false)
-        stopProgressTracking()
-        stopVisualizerSimulation()
+        stopAllPlaybackJobs()
         saveSessionState()
     }
 
@@ -532,7 +550,21 @@ class AetherPlayerEngine(
         currentSettings = settings
     }
 
+    private fun abandonAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(null)
+            }
+        } catch (_: Exception) { }
+        audioFocusRequest = null
+    }
+
     private fun requestAudioFocus(): Boolean {
+        abandonAudioFocus()
+
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(
@@ -543,13 +575,13 @@ class AetherPlayerEngine(
                 )
                 .setOnAudioFocusChangeListener { focusChange ->
                     when (focusChange) {
-                        AudioManager.AUDIOFOCUS_LOSS -> pause()
+                        AudioManager.AUDIOFOCUS_LOSS,
                         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> pause()
-                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> activePlayer?.setVolume(0.2f, 0.2f)
+                        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                            try { activePlayer?.setVolume(0.2f, 0.2f) } catch (_: Exception) {}
+                        }
                         AudioManager.AUDIOFOCUS_GAIN -> {
-                            try {
-                                activePlayer?.setVolume(1.0f, 1.0f)
-                            } catch (_: Exception) { }
+                            try { activePlayer?.setVolume(1.0f, 1.0f) } catch (_: Exception) {}
                         }
                     }
                 }
@@ -560,7 +592,10 @@ class AetherPlayerEngine(
             @Suppress("DEPRECATION")
             audioManager.requestAudioFocus(
                 { focusChange ->
-                    if (focusChange == AudioManager.AUDIOFOCUS_LOSS) pause()
+                    if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
+                        focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
+                        pause()
+                    }
                 },
                 AudioManager.STREAM_MUSIC,
                 AudioManager.AUDIOFOCUS_GAIN
@@ -592,6 +627,16 @@ class AetherPlayerEngine(
         try {
             player.release()
         } catch (_: Exception) { }
+    }
+
+    fun release() {
+        stopAllPlaybackJobs()
+        abandonAudioFocus()
+        try {
+            context.unregisterReceiver(noisyReceiver)
+        } catch (_: Exception) { }
+        releasePlayer(activePlayer)
+        activePlayer = null
     }
 
     private fun saveSessionState() {
