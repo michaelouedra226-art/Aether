@@ -1,6 +1,6 @@
 {
-  "name": "Aether Music",
-  "description": "Lecteur de musique futuriste haut de gamme, fluide et précis sans IA générative.",
+  "name": "Aether",
+  "description": "Lecteur de musique 100% local, ultra-fluide et sans IA, propulsé par Media3 ExoPlayer.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

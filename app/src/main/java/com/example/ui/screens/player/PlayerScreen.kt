@@ -1,11 +1,13 @@
 package com.example.ui.screens.player
 
-import android.net.Uri
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode as AnimRepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -20,10 +22,10 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,7 +76,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import com.example.player.RepeatMode
 import com.example.ui.components.FuturisticBadge
-import com.example.ui.components.FuturisticChoiceRow
 import com.example.ui.theme.SpotifyBlack
 import com.example.ui.theme.SpotifyDarkSurface
 import com.example.ui.theme.SpotifyGreen
@@ -100,7 +101,6 @@ fun PlayerScreen(
 
     var showMenu by remember { mutableStateOf(false) }
     var showSpeedSheet by remember { mutableStateOf(false) }
-    var showEqualizerSheet by remember { mutableStateOf(false) }
 
     val currentPosition = if (isDraggingSlider) {
         sliderPositionMs.toLong()
@@ -111,14 +111,26 @@ fun PlayerScreen(
     val totalDuration = playbackState.durationMs.coerceAtLeast(1L)
     val progressFraction = (currentPosition.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
 
-    // Swipe down on the player to minimize
+    // Pulse animation on Artwork while playing (if animationLevel != MINIMAL)
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.985f,
+        targetValue = 1.015f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = AnimRepeatMode.Reverse
+        ),
+        label = "pulse_scale"
+    )
+    val artworkScale = if (playbackState.isPlaying && settings.animationLevel != "MINIMAL") pulseScale else 1f
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        SpotifyDarkSurface,
+                        Color(0xFF181829),
                         SpotifyBlack,
                         SpotifyBlack
                     )
@@ -128,7 +140,7 @@ fun PlayerScreen(
             .navigationBarsPadding()
             .pointerInput(Unit) {
                 detectVerticalDragGestures { _, dragAmount ->
-                    if (dragAmount > 50) {
+                    if (dragAmount > 60) {
                         onBackClick()
                     }
                 }
@@ -139,11 +151,11 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top Bar (Minimize Chevron, Context Title, Overflow Options)
+            // Top Bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp),
+                    .padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -161,18 +173,18 @@ fun PlayerScreen(
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "LECTURE EN COURS",
+                        text = "EN LECTURE",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp,
+                            letterSpacing = 1.2.sp,
                             fontSize = 11.sp
                         ),
-                        color = TextSecondary
+                        color = SpotifyGreen
                     )
                     Text(
-                        text = currentTrack?.album ?: "Aether Player",
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = TextPrimary,
+                        text = currentTrack?.album ?: "Aether Audio",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                        color = TextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -185,7 +197,7 @@ fun PlayerScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreVert,
-                            contentDescription = "Options de lecture",
+                            contentDescription = "Options",
                             tint = TextPrimary,
                             modifier = Modifier.size(24.dp)
                         )
@@ -207,27 +219,28 @@ fun PlayerScreen(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Égaliseur & Effets", color = TextPrimary) },
+                            text = { Text("File d'attente", color = TextPrimary) },
                             onClick = {
                                 showMenu = false
-                                showEqualizerSheet = true
+                                onNavigateToQueue()
                             },
                             leadingIcon = {
-                                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = SpotifyGreen)
+                                Icon(Icons.Default.QueueMusic, contentDescription = null, tint = SpotifyGreen)
                             }
                         )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Large Hero Album Artwork (Spotify Centered Square)
+            // Large Hero Album Artwork
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(12.dp))
+                    .scale(artworkScale)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(SpotifySurfaceHighlight),
                 contentAlignment = Alignment.Center
             ) {
@@ -255,9 +268,9 @@ fun PlayerScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Track Meta Info (Title, Artist, Format Badge)
+            // Track Meta Info
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -268,16 +281,16 @@ fun PlayerScreen(
                         text = currentTrack?.title ?: "Aucun titre sélectionné",
                         style = MaterialTheme.typography.headlineSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            fontSize = 22.sp
+                            fontSize = 20.sp
                         ),
                         color = TextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = currentTrack?.artist ?: "Sélectionnez une musique",
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                        text = currentTrack?.artist ?: "Sélectionnez un titre",
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
                         color = TextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -292,55 +305,54 @@ fun PlayerScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
             // Interactive Progress Bar (Seeker)
             Column(modifier = Modifier.fillMaxWidth()) {
                 Slider(
                     value = progressFraction,
-                    onValueChange = { fraction ->
+                    onValueChange = { frac ->
                         isDraggingSlider = true
-                        sliderPositionMs = fraction * totalDuration
+                        sliderPositionMs = frac * totalDuration
                     },
                     onValueChangeFinished = {
-                        viewModel.seekTo(sliderPositionMs.toLong())
                         isDraggingSlider = false
+                        viewModel.seekTo(sliderPositionMs.toLong())
                     },
                     colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = SpotifySurfaceHighlight
+                        thumbColor = TextPrimary,
+                        activeTrackColor = SpotifyGreen,
+                        inactiveTrackColor = Color(0xFF27273A)
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(28.dp)
                 )
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
                         text = formatTime(currentPosition),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
                     Text(
                         text = formatTime(totalDuration),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
                 }
             }
 
-            // Playback Control Cluster (Shuffle, Prev, Play/Pause, Next, Repeat)
+            // Main Playback Controls
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                // Shuffle Button
                 IconButton(
                     onClick = { viewModel.toggleShuffle() },
                     modifier = Modifier.size(44.dp)
@@ -349,114 +361,69 @@ fun PlayerScreen(
                         imageVector = Icons.Default.Shuffle,
                         contentDescription = "Lecture aléatoire",
                         tint = if (playbackState.isShuffle) SpotifyGreen else TextSecondary,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(26.dp)
                     )
                 }
 
+                // Previous Track
                 IconButton(
                     onClick = { viewModel.previous() },
-                    modifier = Modifier.size(52.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipPrevious,
-                        contentDescription = "Titre précédent",
+                        contentDescription = "Morceau précédent",
                         tint = TextPrimary,
-                        modifier = Modifier.size(38.dp)
-                    )
-                }
-
-                // Play / Pause Circle (Prominent Spotify White Circle)
-                val playInteractionSource = remember { MutableInteractionSource() }
-                val isPlayPressed by playInteractionSource.collectIsPressedAsState()
-                val playScale by animateFloatAsState(
-                    targetValue = if (isPlayPressed) 0.92f else 1.0f,
-                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 500f),
-                    label = "play_scale"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .size(68.dp)
-                        .scale(playScale)
-                        .clip(CircleShape)
-                        .background(Color.White)
-                        .clickable(
-                            interactionSource = playInteractionSource,
-                            indication = null,
-                            onClick = { viewModel.togglePlayPause() }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playbackState.isPlaying) "Mettre en pause" else "Lire",
-                        tint = Color.Black,
                         modifier = Modifier.size(36.dp)
                     )
                 }
 
+                // Play / Pause Button with tactile spring bounce
+                PlayPauseBigButton(
+                    isPlaying = playbackState.isPlaying,
+                    onClick = { viewModel.togglePlayPause() }
+                )
+
+                // Next Track
                 IconButton(
                     onClick = { viewModel.next() },
-                    modifier = Modifier.size(52.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.SkipNext,
-                        contentDescription = "Titre suivant",
+                        contentDescription = "Morceau suivant",
                         tint = TextPrimary,
-                        modifier = Modifier.size(38.dp)
+                        modifier = Modifier.size(36.dp)
                     )
                 }
 
+                // Repeat Mode Toggle
                 IconButton(
                     onClick = { viewModel.toggleRepeat() },
                     modifier = Modifier.size(44.dp)
                 ) {
-                    val (icon, tint) = when (playbackState.repeatMode) {
-                        RepeatMode.ONE -> Icons.Default.RepeatOne to SpotifyGreen
-                        RepeatMode.ALL -> Icons.Default.Repeat to SpotifyGreen
-                        else -> Icons.Default.Repeat to TextSecondary
+                    val (repIcon, repTint) = when (playbackState.repeatMode) {
+                        RepeatMode.ALL -> Pair(Icons.Default.Repeat, SpotifyGreen)
+                        RepeatMode.ONE -> Pair(Icons.Default.RepeatOne, SpotifyGreen)
+                        else -> Pair(Icons.Default.Repeat, TextSecondary)
                     }
                     Icon(
-                        imageVector = icon,
+                        imageVector = repIcon,
                         contentDescription = "Mode de répétition",
-                        tint = tint,
-                        modifier = Modifier.size(24.dp)
+                        tint = repTint,
+                        modifier = Modifier.size(26.dp)
                     )
                 }
             }
 
-            // Bottom Auxiliary Actions (Speed chip, Queue button)
+            // Bottom Auxiliary Actions (Queue, Visualizer indicator)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // Speed Chip
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(SpotifyDarkSurface)
-                        .clickable { showSpeedSheet = true }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Speed,
-                        contentDescription = null,
-                        tint = SpotifyGreen,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "${playbackState.playbackSpeed}x",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = TextPrimary
-                    )
-                }
-
-                // Queue Trigger
                 IconButton(
                     onClick = onNavigateToQueue,
                     modifier = Modifier.size(40.dp)
@@ -468,21 +435,53 @@ fun PlayerScreen(
                         modifier = Modifier.size(24.dp)
                     )
                 }
+
+                if (playbackState.playbackSpeed != 1.0f) {
+                    Text(
+                        text = "${playbackState.playbackSpeed}x",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = SpotifyGreen,
+                        modifier = Modifier.clickable { showSpeedSheet = true }
+                    )
+                }
+
+                if (settings.visualizerEnabled && playbackState.isPlaying) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        val freqs = playbackState.visualizerFrequencies
+                        for (i in 0 until minOf(8, freqs.size)) {
+                            val amp = freqs[i]
+                            val barHeight = (amp * 16f).coerceIn(4f, 18f)
+                            Box(
+                                modifier = Modifier
+                                    .width(3.dp)
+                                    .height(barHeight.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(SpotifyGreen)
+                            )
+                        }
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(40.dp))
+                }
             }
         }
     }
 
-    // Modal BottomSheet for Playback Speed
+    // Playback Speed Bottom Sheet
     if (showSpeedSheet) {
+        val sheetState = rememberModalBottomSheetState()
         ModalBottomSheet(
             onDismissRequest = { showSpeedSheet = false },
-            sheetState = rememberModalBottomSheetState(),
+            sheetState = sheetState,
             containerColor = SpotifyDarkSurface
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .padding(24.dp)
             ) {
                 Text(
                     text = "Vitesse de lecture",
@@ -491,60 +490,75 @@ fun PlayerScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
-                val speedOptions = listOf("0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x")
-                val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
-                val currentIdx = speeds.indexOfFirst { kotlin.math.abs(it - playbackState.playbackSpeed) < 0.05f }.coerceAtLeast(2)
-
-                FuturisticChoiceRow(
-                    title = "Ajuster la cadence audio",
-                    subtitle = "Vitesse dynamique sans distorsion de pitch",
-                    options = speedOptions,
-                    selectedIndex = currentIdx,
-                    onOptionSelected = {
-                        viewModel.updatePlaybackSpeed(speeds[it])
-                        showSpeedSheet = false
+                val speedOptions = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+                speedOptions.forEach { speedVal ->
+                    val isSelected = playbackState.playbackSpeed == speedVal
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                viewModel.setPlaybackSpeed(speedVal)
+                                showSpeedSheet = false
+                            }
+                            .padding(vertical = 12.dp, horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${speedVal}x",
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            ),
+                            color = if (isSelected) SpotifyGreen else TextPrimary
+                        )
+                        if (isSelected) {
+                            Icon(
+                                imageVector = Icons.Default.GraphicEq,
+                                contentDescription = null,
+                                tint = SpotifyGreen
+                            )
+                        }
                     }
-                )
-                Spacer(modifier = Modifier.height(24.dp))
+                }
             }
         }
     }
+}
 
-    // Modal BottomSheet for Equalizer & Audio Profile
-    if (showEqualizerSheet) {
-        ModalBottomSheet(
-            onDismissRequest = { showEqualizerSheet = false },
-            sheetState = rememberModalBottomSheetState(),
-            containerColor = SpotifyDarkSurface
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
-            ) {
-                Text(
-                    text = "Égaliseur & Signature Audio",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = TextPrimary
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+@Composable
+fun PlayPauseBigButton(
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.88f else 1.0f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "play_button_scale"
+    )
 
-                val eqOptions = listOf("Flat", "Bass Boost", "Electronic", "Vocal", "Rock")
-                val currentEq = settings.equalizerPreset.coerceIn(0, eqOptions.lastIndex)
-
-                FuturisticChoiceRow(
-                    title = "Profil sonore actif",
-                    subtitle = "DSP matériel et égalisation numérique",
-                    options = eqOptions,
-                    selectedIndex = currentEq,
-                    onOptionSelected = {
-                        viewModel.updateEqualizerPreset(eqOptions[it])
-                        showEqualizerSheet = false
-                    }
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-        }
+    Box(
+        modifier = modifier
+            .size(68.dp)
+            .scale(scale)
+            .clip(CircleShape)
+            .background(TextPrimary)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            contentDescription = if (isPlaying) "Pause" else "Lecture",
+            tint = SpotifyBlack,
+            modifier = Modifier.size(38.dp)
+        )
     }
 }
 

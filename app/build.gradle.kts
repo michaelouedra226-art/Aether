@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.aethermusic.vtzxq"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "2.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -89,6 +89,10 @@ dependencies {
   implementation(libs.androidx.core.ktx)
   implementation(libs.androidx.datastore.preferences)
   implementation(libs.androidx.media)
+  implementation(libs.androidx.media3.exoplayer)
+  implementation(libs.androidx.media3.session)
+  implementation(libs.androidx.media3.common)
+  implementation(libs.androidx.media3.ui)
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)

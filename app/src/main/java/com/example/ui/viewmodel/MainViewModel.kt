@@ -12,13 +12,11 @@ import com.example.data.repository.AlbumGroup
 import com.example.data.repository.ArtistGroup
 import com.example.data.repository.FolderGroup
 import com.example.player.PlaybackState
-import com.example.player.RepeatMode
 import com.example.service.MusicPlaybackService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -230,33 +228,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         playerEngine.setPlaybackSpeed(speed)
     }
 
-    fun updatePlaybackSpeed(speed: Float) {
-        playerEngine.setPlaybackSpeed(speed)
-    }
-
-    fun updateEqualizerPreset(preset: String) {
-        val presetIndex = when (preset) {
-            "Bass Boost" -> 1
-            "Electronic", "Cyber Synth" -> 2
-            "Vocal" -> 3
-            "Rock" -> 4
-            else -> 0
-        }
-        viewModelScope.launch {
-            settingsManager.updateEqualizer(autoSpectral = true, preset = presetIndex)
-        }
-    }
-
     fun rescanLibrary(context: Context) {
         viewModelScope.launch {
             _isScanning.value = true
-            _scanMessage.value = "Indexation des fichiers audio sécurisés..."
+            _scanMessage.value = "Indexation des fichiers audio locaux..."
             val count = audioRepository.rescanLibrary()
             _isScanning.value = false
             val msg = if (count > 0) {
-                "$count pistes indexées (Audios WhatsApp exclus)"
+                "$count pistes indexées (WhatsApp exclu)"
             } else {
-                "Aucune piste trouvée sur le stockage (Fichiers WhatsApp exclus)"
+                "Aucune piste trouvée sur le stockage (WhatsApp exclu)"
             }
             _scanMessage.value = msg
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -286,49 +267,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsManager.updateGapless(enabled) }
     }
 
-    fun updatePauseOnUnplug(enabled: Boolean) {
+    fun updateAutoResumePosition(enabled: Boolean) {
         viewModelScope.launch { settingsManager.updateAutoResume(enabled) }
     }
 
-    fun updateResumeOnHeadsetPlug(enabled: Boolean) {
-        viewModelScope.launch { settingsManager.updateAutoResume(enabled) }
+    fun updateEndOfQueueAction(action: String) {
+        viewModelScope.launch { settingsManager.updateEndOfQueueAction(action) }
     }
 
     fun updateExcludeWhatsApp(enabled: Boolean) {
         viewModelScope.launch { settingsManager.updateWhatsAppExclusion(enabled) }
     }
 
-    fun updateExcludeRecordings(enabled: Boolean) {
-        viewModelScope.launch { settingsManager.updateWhatsAppExclusion(enabled) }
+    fun updateRescanFrequency(frequency: String) {
+        viewModelScope.launch { settingsManager.updateRescanFrequency(frequency) }
     }
 
-    fun updateMinDurationSec(seconds: Int) {
-        // Updated in repository filter if needed
+    fun updateAnimationLevel(level: String) {
+        viewModelScope.launch { settingsManager.updateAnimationLevel(level) }
     }
 
-    fun updateThemePreference(pref: String) {
-        viewModelScope.launch { settingsManager.updateTheme(pref) }
-    }
-
-    fun updateVisualizerStyle(style: String) {
-        viewModelScope.launch { settingsManager.updateAnimationLevel(style) }
-    }
-
-    fun updateFluidAnimations(enabled: Boolean) {
-        viewModelScope.launch { settingsManager.updateAnimationLevel(if (enabled) "MAXIMUM" else "MINIMAL") }
+    fun updateUiDensity(density: String) {
+        viewModelScope.launch { settingsManager.updateUiDensity(density) }
     }
 
     fun updateBatterySaverMode(enabled: Boolean) {
         viewModelScope.launch { settingsManager.updateBatterySaver(enabled) }
     }
 
-    fun updateBackgroundPersistence(enabled: Boolean) {
-        viewModelScope.launch { settingsManager.updateAutoResume(enabled) }
+    fun updateVisualizerEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsManager.updateVisualizerEnabled(enabled) }
     }
 
-    fun resetSettings() {
+    fun resetPlaybackSession(context: Context) {
         viewModelScope.launch {
             settingsManager.resetAllPlaybackData()
+            Toast.makeText(context, "Session de lecture réinitialisée", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -337,7 +311,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             audioRepository.clearAllData()
             playerEngine.pause()
             MusicPlaybackService.stopService(context)
-            Toast.makeText(context, "Données et bibliothèque réinitialisées", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Bibliothèque réinitialisée", Toast.LENGTH_SHORT).show()
         }
     }
 

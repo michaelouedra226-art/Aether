@@ -26,12 +26,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -40,6 +42,8 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -79,13 +83,16 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val allTracks by viewModel.allTracks.collectAsStateWithLifecycle()
+    val recentTracks by viewModel.recentTracks.collectAsStateWithLifecycle()
     val artistGroups by viewModel.artistGroups.collectAsStateWithLifecycle()
     val albumGroups by viewModel.albumGroups.collectAsStateWithLifecycle()
     val folderGroups by viewModel.folderGroups.collectAsStateWithLifecycle()
     val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
 
     var selectedFilterIndex by remember { mutableIntStateOf(0) }
-    val filters = listOf("Titres", "Albums", "Artistes", "Dossiers")
+    val filters = listOf("Titres", "Albums", "Artistes", "Dossiers", "Récents")
 
     Column(
         modifier = modifier
@@ -97,12 +104,12 @@ fun LibraryScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 8.dp),
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                text = "Votre bibliothèque",
+                text = "Bibliothèque",
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 24.sp
@@ -125,7 +132,51 @@ fun LibraryScreen(
             }
         }
 
-        // Horizontal Category Filter Pills (Spotify Chips)
+        // Integrated Search Bar inside Library (§9.1 / §9.3)
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { viewModel.onSearchQueryChanged(it) },
+            placeholder = {
+                Text(
+                    text = "Rechercher un titre, artiste ou album...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = TextSecondary
+                )
+            },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { viewModel.clearSearch() }) {
+                        Icon(
+                            imageVector = Icons.Default.Clear,
+                            contentDescription = "Effacer la recherche",
+                            tint = TextSecondary
+                        )
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = SpotifyDarkSurface,
+                unfocusedContainerColor = SpotifyDarkSurface,
+                focusedBorderColor = SpotifyGreen,
+                unfocusedBorderColor = Color(0xFF27273A),
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+        )
+
+        // Filter Pills
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -157,127 +208,168 @@ fun LibraryScreen(
             }
         }
 
-        // Content Area based on Selected Filter
-        when (selectedFilterIndex) {
-            0 -> {
-                // TITRES
-                if (allTracks.isEmpty()) {
-                    EmptyLibraryView(message = "Aucun titre trouvé sur l'appareil")
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        item {
-                            Text(
-                                text = "${allTracks.size} titres enregistrés",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
+        // Active Search Results Overlay
+        if (searchQuery.isNotBlank()) {
+            if (searchResults.isEmpty()) {
+                EmptyLibraryView(message = "Aucun résultat trouvé pour \"$searchQuery\"")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    item {
+                        Text(
+                            text = "${searchResults.size} résultats",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    items(searchResults, key = { "search_${it.id}" }) { track ->
+                        val isCurrent = playbackState.currentTrack?.id == track.id
+                        TrackLibraryRow(
+                            track = track,
+                            isCurrent = isCurrent,
+                            isPlaying = isCurrent && playbackState.isPlaying,
+                            onClick = { viewModel.playTrack(track, searchResults) },
+                            onPlayNext = { viewModel.playNext(track) },
+                            onAddToQueue = { viewModel.addToQueue(track) }
+                        )
+                    }
+                }
+            }
+        } else {
+            // Category Tabs
+            when (selectedFilterIndex) {
+                0 -> {
+                    // TITRES
+                    if (allTracks.isEmpty()) {
+                        EmptyLibraryView(message = "Aucun titre trouvé sur l'appareil")
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            item {
+                                Text(
+                                    text = "${allTracks.size} titres",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                            items(allTracks, key = { it.id }) { track ->
+                                val isCurrent = playbackState.currentTrack?.id == track.id
+                                TrackLibraryRow(
+                                    track = track,
+                                    isCurrent = isCurrent,
+                                    isPlaying = isCurrent && playbackState.isPlaying,
+                                    onClick = { viewModel.playTrack(track, allTracks) },
+                                    onPlayNext = { viewModel.playNext(track) },
+                                    onAddToQueue = { viewModel.addToQueue(track) }
+                                )
+                            }
                         }
-                        items(allTracks, key = { it.id }) { track ->
-                            val isCurrent = playbackState.currentTrack?.id == track.id
-                            TrackLibraryRow(
-                                track = track,
-                                isCurrent = isCurrent,
-                                isPlaying = isCurrent && playbackState.isPlaying,
-                                onClick = { viewModel.playTrack(track, allTracks) },
-                                onPlayNext = { viewModel.playNext(track) },
-                                onAddToQueue = { viewModel.addToQueue(track) }
-                            )
+                    }
+                }
+
+                1 -> {
+                    // ALBUMS
+                    if (albumGroups.isEmpty()) {
+                        EmptyLibraryView(message = "Aucun album trouvé")
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
+                        ) {
+                            items(albumGroups, key = { it.albumName }) { album ->
+                                AlbumGridItem(
+                                    album = album,
+                                    onClick = { onNavigateToAlbum(album.albumName) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                2 -> {
+                    // ARTISTES
+                    if (artistGroups.isEmpty()) {
+                        EmptyLibraryView(message = "Aucun artiste trouvé")
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(artistGroups, key = { it.artistName }) { artist ->
+                                ArtistLibraryRow(
+                                    artist = artist,
+                                    onClick = { onNavigateToArtist(artist.artistName) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                3 -> {
+                    // DOSSIERS
+                    if (folderGroups.isEmpty()) {
+                        EmptyLibraryView(message = "Aucun dossier musical trouvé")
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(folderGroups, key = { it.folderName }) { folder ->
+                                FolderLibraryRow(
+                                    folder = folder,
+                                    onClick = { onNavigateToFolder(folder.folderName) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                4 -> {
+                    // RÉCENTS
+                    if (recentTracks.isEmpty()) {
+                        EmptyLibraryView(message = "Aucun titre récemment écouté")
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            item {
+                                Text(
+                                    text = "${recentTracks.size} titres récents",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                            items(recentTracks, key = { "recent_${it.id}" }) { track ->
+                                val isCurrent = playbackState.currentTrack?.id == track.id
+                                TrackLibraryRow(
+                                    track = track,
+                                    isCurrent = isCurrent,
+                                    isPlaying = isCurrent && playbackState.isPlaying,
+                                    onClick = { viewModel.playTrack(track, recentTracks) },
+                                    onPlayNext = { viewModel.playNext(track) },
+                                    onAddToQueue = { viewModel.addToQueue(track) }
+                                )
+                            }
                         }
                     }
                 }
             }
-
-            1 -> {
-                // ALBUMS
-                if (albumGroups.isEmpty()) {
-                    EmptyLibraryView(message = "Aucun album trouvé")
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        items(albumGroups, key = { it.albumName }) { album ->
-                            AlbumGridItem(
-                                album = album,
-                                onClick = { onNavigateToAlbum(album.albumName) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            2 -> {
-                // ARTISTES
-                if (artistGroups.isEmpty()) {
-                    EmptyLibraryView(message = "Aucun artiste trouvé")
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        items(artistGroups, key = { it.artistName }) { artist ->
-                            ArtistLibraryRow(
-                                artist = artist,
-                                onClick = { onNavigateToArtist(artist.artistName) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            3 -> {
-                // DOSSIERS
-                if (folderGroups.isEmpty()) {
-                    EmptyLibraryView(message = "Aucun dossier musical trouvé")
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 140.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        items(folderGroups, key = { it.folderName }) { folder ->
-                            FolderLibraryRow(
-                                folder = folder,
-                                onClick = { onNavigateToFolder(folder.folderName) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun EmptyLibraryView(message: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 120.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = Icons.Default.MusicNote,
-                contentDescription = null,
-                tint = TextSecondary,
-                modifier = Modifier.size(48.dp)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextSecondary
-            )
         }
     }
 }
@@ -289,21 +381,22 @@ fun TrackLibraryRow(
     isPlaying: Boolean,
     onClick: () -> Unit,
     onPlayNext: () -> Unit,
-    onAddToQueue: () -> Unit
+    onAddToQueue: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    var showMenu by remember { mutableStateOf(false) }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
+            .padding(vertical = 6.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(52.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .background(SpotifySurfaceHighlight),
             contentAlignment = Alignment.Center
@@ -318,7 +411,7 @@ fun TrackLibraryRow(
                         imageVector = Icons.Default.MusicNote,
                         contentDescription = null,
                         tint = SpotifyGreen,
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 },
                 loading = {
@@ -326,7 +419,7 @@ fun TrackLibraryRow(
                         imageVector = Icons.Default.MusicNote,
                         contentDescription = null,
                         tint = SpotifyGreen.copy(alpha = 0.5f),
-                        modifier = Modifier.size(22.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             )
@@ -345,7 +438,9 @@ fun TrackLibraryRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
             Spacer(modifier = Modifier.height(2.dp))
+
             Text(
                 text = "${track.artist} • ${track.album}",
                 style = MaterialTheme.typography.bodySmall.copy(
@@ -364,40 +459,40 @@ fun TrackLibraryRow(
                 tint = SpotifyGreen,
                 modifier = Modifier
                     .size(18.dp)
-                    .padding(end = 4.dp)
+                    .padding(end = 6.dp)
             )
         }
 
         Box {
             IconButton(
-                onClick = { showMenu = true },
+                onClick = { menuExpanded = true },
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.MoreVert,
                     contentDescription = "Options",
                     tint = TextSecondary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
             DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false },
+                expanded = menuExpanded,
+                onDismissRequest = { menuExpanded = false },
                 modifier = Modifier.background(SpotifyDarkSurface)
             ) {
                 DropdownMenuItem(
-                    text = { Text("Écouter ensuite", color = TextPrimary) },
+                    text = { Text("Lire ensuite", color = TextPrimary) },
                     onClick = {
+                        menuExpanded = false
                         onPlayNext()
-                        showMenu = false
                     }
                 )
                 DropdownMenuItem(
                     text = { Text("Ajouter à la file d'attente", color = TextPrimary) },
                     onClick = {
+                        menuExpanded = false
                         onAddToQueue()
-                        showMenu = false
                     }
                 )
             }
@@ -408,13 +503,15 @@ fun TrackLibraryRow(
 @Composable
 fun AlbumGridItem(
     album: AlbumGroup,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
+            .padding(4.dp)
     ) {
         Box(
             modifier = Modifier
@@ -434,7 +531,7 @@ fun AlbumGridItem(
                         imageVector = Icons.Default.Album,
                         contentDescription = null,
                         tint = SpotifyGreen,
-                        modifier = Modifier.size(54.dp)
+                        modifier = Modifier.size(48.dp)
                     )
                 },
                 loading = {
@@ -442,7 +539,7 @@ fun AlbumGridItem(
                         imageVector = Icons.Default.Album,
                         contentDescription = null,
                         tint = SpotifyGreen.copy(alpha = 0.5f),
-                        modifier = Modifier.size(54.dp)
+                        modifier = Modifier.size(48.dp)
                     )
                 }
             )
@@ -454,7 +551,7 @@ fun AlbumGridItem(
             text = album.albumName,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 14.sp
+                fontSize = 13.sp
             ),
             color = TextPrimary,
             maxLines = 1,
@@ -466,7 +563,7 @@ fun AlbumGridItem(
         Text(
             text = "${album.artist} • ${album.trackCount} titres",
             style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = TextSecondary
             ),
             maxLines = 1,
@@ -478,14 +575,15 @@ fun AlbumGridItem(
 @Composable
 fun ArtistLibraryRow(
     artist: ArtistGroup,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
+            .padding(vertical = 8.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
@@ -524,7 +622,7 @@ fun ArtistLibraryRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = artist.artistName,
-                style = MaterialTheme.typography.bodyLarge.copy(
+                style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp
                 ),
@@ -532,9 +630,11 @@ fun ArtistLibraryRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
             Spacer(modifier = Modifier.height(2.dp))
+
             Text(
-                text = "Artiste • ${artist.trackCount} titres",
+                text = "${artist.trackCount} titres",
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontSize = 12.sp,
                     color = TextSecondary
@@ -547,19 +647,20 @@ fun ArtistLibraryRow(
 @Composable
 fun FolderLibraryRow(
     folder: FolderGroup,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
+            .padding(vertical = 8.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(52.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(SpotifyDarkSurface),
             contentAlignment = Alignment.Center
@@ -568,7 +669,7 @@ fun FolderLibraryRow(
                 imageVector = Icons.Default.Folder,
                 contentDescription = null,
                 tint = SpotifyGreen,
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(28.dp)
             )
         }
 
@@ -579,19 +680,53 @@ fun FolderLibraryRow(
                 text = folder.folderName,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
+                    fontSize = 15.sp
                 ),
                 color = TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
             Spacer(modifier = Modifier.height(2.dp))
+
             Text(
                 text = "${folder.trackCount} titres",
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontSize = 12.sp,
                     color = TextSecondary
                 )
+            )
+        }
+    }
+}
+
+@Composable
+fun EmptyLibraryView(
+    message: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                tint = TextSecondary.copy(alpha = 0.5f),
+                modifier = Modifier.size(56.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = TextSecondary,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         }
     }

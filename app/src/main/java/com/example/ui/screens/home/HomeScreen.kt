@@ -2,7 +2,6 @@ package com.example.ui.screens.home
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -18,7 +17,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,9 +32,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -52,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -63,8 +61,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import com.example.data.model.Track
-import com.example.data.repository.AlbumGroup
-import com.example.data.repository.ArtistGroup
+import com.example.ui.theme.CyberCyan
+import com.example.ui.theme.ElectricViolet
 import com.example.ui.theme.SpotifyBlack
 import com.example.ui.theme.SpotifyDarkSurface
 import com.example.ui.theme.SpotifyGreen
@@ -87,8 +85,6 @@ fun HomeScreen(
     val allTracks by viewModel.allTracks.collectAsStateWithLifecycle()
     val recentTracks by viewModel.recentTracks.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
-    val artistGroups by viewModel.artistGroups.collectAsStateWithLifecycle()
-    val albumGroups by viewModel.albumGroups.collectAsStateWithLifecycle()
     val isScanning by viewModel.isScanning.collectAsStateWithLifecycle()
     val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
 
@@ -122,7 +118,7 @@ fun HomeScreen(
             .statusBarsPadding(),
         contentPadding = PaddingValues(bottom = 140.dp)
     ) {
-        // Sticky Header: Greeting & Quick Action Icons
+        // 9.2 Header: Salutation, Scan icon, Settings icon
         item {
             Row(
                 modifier = Modifier
@@ -189,7 +185,7 @@ fun HomeScreen(
             }
         }
 
-        // EMPTY STATE: Pristine Spotify-style empty state
+        // Empty Library Prompt
         if (allTracks.isEmpty() && !isScanning) {
             item {
                 Column(
@@ -217,7 +213,7 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Text(
-                        text = "Votre bibliothèque est vide",
+                        text = "Bibliothèque vide",
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                         color = TextPrimary
                     )
@@ -225,7 +221,7 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Scannez la mémoire de votre appareil pour importer instantanément votre musique locale, sans aucun fichier parasite.",
+                        text = "Scannez la mémoire de votre téléphone pour écouter vos musiques locales.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -268,7 +264,26 @@ fun HomeScreen(
                 }
             }
         } else if (allTracks.isNotEmpty()) {
-            // Quick 2-Column Launch Grid (Spotify 6-pack)
+            // 9.2 Hero Card: Current or last listened track (Tap -> player / play)
+            val heroTrack = playbackState.currentTrack ?: playbackHistory.firstOrNull() ?: allTracks.firstOrNull()
+            if (heroTrack != null) {
+                item {
+                    HomeHeroCard(
+                        track = heroTrack,
+                        isPlaying = playbackState.isPlaying && playbackState.currentTrack?.id == heroTrack.id,
+                        onPlayClick = {
+                            if (playbackState.currentTrack?.id == heroTrack.id) {
+                                viewModel.togglePlayPause()
+                            } else {
+                                viewModel.playTrack(heroTrack, allTracks)
+                            }
+                        },
+                        onCardClick = onNavigateToPlayer
+                    )
+                }
+            }
+
+            // 9.2 Grille rapide: jusqu'à 6 titres
             val quickItems = (playbackHistory.ifEmpty { allTracks }).take(6)
             item {
                 Column(
@@ -302,7 +317,7 @@ fun HomeScreen(
                 }
             }
 
-            // Section: Récemment écoutés (Horizontal Carousel)
+            // 9.2 Récemment écoutés (Horizontal Carousel)
             val recentList = (playbackHistory.ifEmpty { recentTracks }).take(10)
             if (recentList.isNotEmpty()) {
                 item {
@@ -328,6 +343,120 @@ fun HomeScreen(
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeHeroCard(
+    track: Track,
+    isPlaying: Boolean,
+    onPlayClick: () -> Unit,
+    onCardClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        Color(0xFF1E1B4B),
+                        Color(0xFF0F172A)
+                    )
+                )
+            )
+            .clickable(onClick = onCardClick)
+            .padding(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(68.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(SpotifySurfaceHighlight),
+                contentAlignment = Alignment.Center
+            ) {
+                SubcomposeAsyncImage(
+                    model = track.albumArtUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    error = {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = SpotifyGreen,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    },
+                    loading = {
+                        Icon(
+                            imageVector = Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = SpotifyGreen.copy(alpha = 0.5f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (isPlaying) "EN LECTURE" else "REPRENDRE LA LECTURE",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        fontSize = 10.sp
+                    ),
+                    color = CyberCyan
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                Text(
+                    text = track.title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    ),
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = track.artist,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            IconButton(
+                onClick = onPlayClick,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(SpotifyGreen)
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.GraphicEq else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Lecture",
+                    tint = Color.Black,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }
@@ -535,168 +664,5 @@ fun SpotifySquareCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-    }
-}
-
-@Composable
-fun SpotifyArtistCard(
-    artist: ArtistGroup,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1.0f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
-        label = "artist_scale"
-    )
-
-    Column(
-        modifier = modifier
-            .width(110.dp)
-            .scale(scale)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick
-            ),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(100.dp)
-                .clip(CircleShape)
-                .background(SpotifyDarkSurface),
-            contentAlignment = Alignment.Center
-        ) {
-            SubcomposeAsyncImage(
-                model = artist.albumArtUri,
-                contentDescription = artist.artistName,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-                error = {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = SpotifyGreen,
-                        modifier = Modifier.size(40.dp)
-                    )
-                },
-                loading = {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = SpotifyGreen.copy(alpha = 0.5f),
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = artist.artistName,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
-            ),
-            color = TextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-
-        Text(
-            text = "Artiste",
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 11.sp,
-                color = TextSecondary
-            )
-        )
-    }
-}
-
-@Composable
-fun SpotifyTrackRow(
-    track: Track,
-    isCurrent: Boolean,
-    isPlaying: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
-            .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(SpotifySurfaceHighlight),
-            contentAlignment = Alignment.Center
-        ) {
-            SubcomposeAsyncImage(
-                model = track.albumArtUri,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-                error = {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = SpotifyGreen,
-                        modifier = Modifier.size(22.dp)
-                    )
-                },
-                loading = {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = SpotifyGreen.copy(alpha = 0.5f),
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = track.title,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                    fontSize = 14.sp
-                ),
-                color = if (isCurrent) SpotifyGreen else TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "${track.artist} • ${track.album}",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontSize = 12.sp,
-                    color = TextSecondary
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        if (isCurrent && isPlaying) {
-            Icon(
-                imageVector = Icons.Default.GraphicEq,
-                contentDescription = null,
-                tint = SpotifyGreen,
-                modifier = Modifier.size(18.dp)
-            )
-        }
     }
 }

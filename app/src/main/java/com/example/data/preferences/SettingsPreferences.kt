@@ -17,36 +17,26 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "ae
 
 data class AetherSettings(
     // 1. Lecture
-    val crossfadeEnabled: Boolean = true,
+    val crossfadeEnabled: Boolean = false,
     val crossfadeDuration: Float = 3.0f,
     val crossfadeCurve: String = "EqualPower", // Linear, Exponential, EqualPower
     val gaplessPlayback: Boolean = true,
     val autoResumePosition: Boolean = true,
-    val loudnessNormalized: Boolean = false,
-    val loudnessGain: Float = 3.0f,
-    val autoEqualizerSpectral: Boolean = true,
-    val equalizerPreset: Int = 2, // 0: Flat, 1: Bass Boost, 2: Cyber Synth, 3: Vocal Boost, 4: Pure Treble
-    val endOfQueueAction: String = "REPEAT", // STOP, REPEAT, SMART_SHUFFLE
+    val endOfQueueAction: String = "STOP", // STOP, REPEAT
 
     // 2. Bibliothèque
     val whatsAppExclusion: Boolean = true,
-    val rescanFrequency: String = "ON_START", // ON_START, MANUAL, PERIODIC
-    val albumArtQuality: String = "HD", // HD, ECO
-    val defaultSortOrder: String = "TITLE_ASC", // TITLE_ASC, ARTIST_ASC, DATE_DESC, DURATION_DESC
+    val rescanFrequency: String = "ON_START", // ON_START, MANUAL
 
     // 3. Interface & Comportement
-    val themePreference: String = "OLED_DARK", // OLED_DARK, CYBER_DARK, SYSTEM
+    val themePreference: String = "OLED_DARK", // OLED_DARK, SYSTEM
     val animationLevel: String = "MAXIMUM", // MINIMAL, BALANCED, MAXIMUM
-    val showNotificationProgress: Boolean = true,
     val uiDensity: String = "COMFORTABLE", // COMPACT, COMFORTABLE, SPACIOUS
     val doubleBackExitDelayMs: Long = 2000L,
 
     // 4. Performance
     val batterySaverMode: Boolean = false,
-    val preloadQuality: String = "HIGH", // STANDARD, HIGH
-
-    // 5. Avancé
-    val diagnosticLogs: Boolean = false,
+    val visualizerEnabled: Boolean = true,
 
     // Playback persistence state
     val lastTrackId: Long = -1L,
@@ -83,8 +73,7 @@ class SettingsManager(private val context: Context) {
         val DOUBLE_BACK_DELAY = longPreferencesKey("double_back_delay")
 
         val BATTERY_SAVER = booleanPreferencesKey("battery_saver")
-        val PRELOAD_QUALITY = stringPreferencesKey("preload_quality")
-        val DIAGNOSTIC_LOGS = booleanPreferencesKey("diagnostic_logs")
+        val VISUALIZER_ENABLED = booleanPreferencesKey("visualizer_enabled")
 
         val LAST_TRACK_ID = longPreferencesKey("last_track_id")
         val LAST_POSITION_MS = longPreferencesKey("last_position_ms")
@@ -96,31 +85,23 @@ class SettingsManager(private val context: Context) {
 
     val settingsFlow: Flow<AetherSettings> = context.dataStore.data.map { prefs ->
         AetherSettings(
-            crossfadeEnabled = prefs[Keys.CROSSFADE_ENABLED] ?: true,
+            crossfadeEnabled = prefs[Keys.CROSSFADE_ENABLED] ?: false,
             crossfadeDuration = prefs[Keys.CROSSFADE_DURATION] ?: 3.0f,
             crossfadeCurve = prefs[Keys.CROSSFADE_CURVE] ?: "EqualPower",
             gaplessPlayback = prefs[Keys.GAPLESS_PLAYBACK] ?: true,
             autoResumePosition = prefs[Keys.AUTO_RESUME_POS] ?: true,
-            loudnessNormalized = prefs[Keys.LOUDNESS_NORMALIZED] ?: false,
-            loudnessGain = prefs[Keys.LOUDNESS_GAIN] ?: 3.0f,
-            autoEqualizerSpectral = prefs[Keys.AUTO_EQ_SPECTRAL] ?: true,
-            equalizerPreset = prefs[Keys.EQ_PRESET] ?: 2,
-            endOfQueueAction = prefs[Keys.END_OF_QUEUE_ACTION] ?: "REPEAT",
+            endOfQueueAction = prefs[Keys.END_OF_QUEUE_ACTION] ?: "STOP",
 
             whatsAppExclusion = prefs[Keys.WHATSAPP_EXCLUSION] ?: true,
             rescanFrequency = prefs[Keys.RESCAN_FREQUENCY] ?: "ON_START",
-            albumArtQuality = prefs[Keys.ALBUM_ART_QUALITY] ?: "HD",
-            defaultSortOrder = prefs[Keys.DEFAULT_SORT_ORDER] ?: "TITLE_ASC",
 
             themePreference = prefs[Keys.THEME_PREFERENCE] ?: "OLED_DARK",
             animationLevel = prefs[Keys.ANIMATION_LEVEL] ?: "MAXIMUM",
-            showNotificationProgress = prefs[Keys.SHOW_NOTIF_PROGRESS] ?: true,
             uiDensity = prefs[Keys.UI_DENSITY] ?: "COMFORTABLE",
             doubleBackExitDelayMs = prefs[Keys.DOUBLE_BACK_DELAY] ?: 2000L,
 
             batterySaverMode = prefs[Keys.BATTERY_SAVER] ?: false,
-            preloadQuality = prefs[Keys.PRELOAD_QUALITY] ?: "HIGH",
-            diagnosticLogs = prefs[Keys.DIAGNOSTIC_LOGS] ?: false,
+            visualizerEnabled = prefs[Keys.VISUALIZER_ENABLED] ?: true,
 
             lastTrackId = prefs[Keys.LAST_TRACK_ID] ?: -1L,
             lastPositionMs = prefs[Keys.LAST_POSITION_MS] ?: 0L,
@@ -129,6 +110,10 @@ class SettingsManager(private val context: Context) {
             shuffleEnabled = prefs[Keys.SHUFFLE_ENABLED] ?: false,
             repeatMode = prefs[Keys.REPEAT_MODE] ?: "OFF"
         )
+    }
+
+    suspend fun updateVisualizerEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[Keys.VISUALIZER_ENABLED] = enabled }
     }
 
     suspend fun updateCrossfade(enabled: Boolean, duration: Float, curve: String) {
@@ -203,14 +188,6 @@ class SettingsManager(private val context: Context) {
 
     suspend fun updateBatterySaver(enabled: Boolean) {
         context.dataStore.edit { it[Keys.BATTERY_SAVER] = enabled }
-    }
-
-    suspend fun updatePreloadQuality(quality: String) {
-        context.dataStore.edit { it[Keys.PRELOAD_QUALITY] = quality }
-    }
-
-    suspend fun updateDiagnosticLogs(enabled: Boolean) {
-        context.dataStore.edit { it[Keys.DIAGNOSTIC_LOGS] = enabled }
     }
 
     suspend fun updatePlaybackSession(

@@ -247,6 +247,15 @@ class MusicPlaybackService : Service() {
         }
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        try {
+            AetherApp.instance.playerEngine.pause()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+        } catch (_: Exception) {}
+    }
+
     override fun onDestroy() {
         mediaSession?.release()
         super.onDestroy()

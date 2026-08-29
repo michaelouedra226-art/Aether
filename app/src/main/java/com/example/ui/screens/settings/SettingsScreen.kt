@@ -13,13 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
@@ -52,9 +51,7 @@ import com.example.ui.components.FuturisticSliderRow
 import com.example.ui.components.FuturisticSwitchRow
 import com.example.ui.components.GlassCard
 import com.example.ui.theme.SpotifyBlack
-import com.example.ui.theme.SpotifyDarkSurface
 import com.example.ui.theme.SpotifyGreen
-import com.example.ui.theme.SpotifySurfaceHighlight
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.MainViewModel
@@ -71,7 +68,7 @@ fun SettingsScreen(
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Lecture", "Bibliothèque", "Interface", "Performance", "Avancé")
 
-    var showResetDialog by remember { mutableStateOf(false) }
+    var showResetDbDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -82,7 +79,7 @@ fun SettingsScreen(
             title = "Paramètres",
             onBackClick = onBackClick,
             actions = {
-                FuturisticBadge(text = "V1.0", color = SpotifyGreen)
+                FuturisticBadge(text = "v2.0", color = SpotifyGreen)
             }
         )
 
@@ -99,7 +96,8 @@ fun SettingsScreen(
                         color = SpotifyGreen
                     )
                 }
-            }
+            },
+            divider = {}
         ) {
             tabs.forEachIndexed { index, title ->
                 val isSelected = selectedTabIndex == index
@@ -126,7 +124,7 @@ fun SettingsScreen(
         ) {
             when (selectedTabIndex) {
                 0 -> {
-                    // LECTURE
+                    // 10.1 LECTURE
                     item {
                         GlassCard {
                             Column {
@@ -138,7 +136,7 @@ fun SettingsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Moteur Audio & Enchaînement",
+                                        text = "Moteur Audio Media3",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         color = TextPrimary
                                     )
@@ -147,22 +145,29 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 FuturisticSwitchRow(
+                                    title = "Reprise de position",
+                                    subtitle = "Mémorise et reprend le morceau et la position exacte au redémarrage",
+                                    checked = settings.autoResumePosition,
+                                    onCheckedChange = { viewModel.updateAutoResumePosition(it) }
+                                )
+
+                                FuturisticSwitchRow(
                                     title = "Lecture sans blanc (Gapless)",
-                                    subtitle = "Transition instantanée et sans interruption entre les morceaux",
+                                    subtitle = "Enchaînement instantané et transparent entre les pistes",
                                     checked = settings.gaplessPlayback,
                                     onCheckedChange = { viewModel.updateGaplessPlayback(it) }
                                 )
 
                                 FuturisticSwitchRow(
                                     title = "Fondu enchaîné (Crossfade)",
-                                    subtitle = "Transition fluide entre la fin et le début du morceau suivant",
+                                    subtitle = "Transition progressive du volume entre pistes consécutives",
                                     checked = settings.crossfadeEnabled,
                                     onCheckedChange = { viewModel.updateCrossfadeEnabled(it) }
                                 )
 
                                 if (settings.crossfadeEnabled) {
                                     FuturisticSliderRow(
-                                        title = "Durée du Crossfade",
+                                        title = "Durée du fondu",
                                         subtitle = "Durée du chevauchement sonore",
                                         value = settings.crossfadeDuration,
                                         valueRange = 1f..12f,
@@ -172,50 +177,16 @@ fun SettingsScreen(
                                     )
                                 }
 
-                                FuturisticSwitchRow(
-                                    title = "Pause au débranchement",
-                                    subtitle = "Arrête automatiquement la lecture lorsque le casque ou Bluetooth est déconnecté",
-                                    checked = settings.autoResumePosition,
-                                    onCheckedChange = { viewModel.updatePauseOnUnplug(it) }
-                                )
-
-                                FuturisticSwitchRow(
-                                    title = "Reprise automatique",
-                                    subtitle = "Reprend la position de lecture lors du redémarrage",
-                                    checked = settings.autoResumePosition,
-                                    onCheckedChange = { viewModel.updateResumeOnHeadsetPlug(it) }
-                                )
-                            }
-                        }
-                    }
-
-                    item {
-                        GlassCard {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    androidx.compose.material3.Icon(
-                                        Icons.Default.GraphicEq,
-                                        contentDescription = null,
-                                        tint = SpotifyGreen
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Profil Audio & Normalisation",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = TextPrimary
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                val eqOptions = listOf("Flat", "Bass Boost", "Electronic", "Vocal", "Rock")
-                                val eqIndex = settings.equalizerPreset.coerceIn(0, eqOptions.lastIndex)
+                                val endQueueOptions = listOf("Arrêter", "Recommencer")
+                                val endQueueIndex = if (settings.endOfQueueAction == "REPEAT") 1 else 0
                                 FuturisticChoiceRow(
-                                    title = "Préréglage Égaliseur",
-                                    subtitle = "Signature sonore de sortie audio",
-                                    options = eqOptions,
-                                    selectedIndex = eqIndex,
-                                    onOptionSelected = { viewModel.updateEqualizerPreset(eqOptions[it]) }
+                                    title = "Action de fin de file",
+                                    subtitle = "Comportement quand le dernier morceau de la liste se termine",
+                                    options = endQueueOptions,
+                                    selectedIndex = endQueueIndex,
+                                    onOptionSelected = { index ->
+                                        viewModel.updateEndOfQueueAction(if (index == 1) "REPEAT" else "STOP")
+                                    }
                                 )
                             }
                         }
@@ -223,9 +194,9 @@ fun SettingsScreen(
                 }
 
                 1 -> {
-                    // BIBLIOTHÈQUE & SÉCURITÉ WHATSAPP
+                    // 10.2 BIBLIOTHÈQUE
                     item {
-                        GlassCard(borderColor = SpotifyGreen.copy(alpha = 0.5f)) {
+                        GlassCard {
                             Column {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     androidx.compose.material3.Icon(
@@ -235,7 +206,7 @@ fun SettingsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Bouclier Anti-WhatsApp & Filtres Parasites",
+                                        text = "Indexation & Filtres",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         color = TextPrimary
                                     )
@@ -244,62 +215,42 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 FuturisticSwitchRow(
-                                    title = "Exclusion stricte WhatsApp",
-                                    subtitle = "Bloque 100% des notes vocales, mémos audio et dossiers WhatsApp de la bibliothèque",
+                                    title = "Exclure WhatsApp & Vocaux",
+                                    subtitle = "Filtre automatiquement les notes vocales WhatsApp et fichiers mémos courts",
                                     checked = settings.whatsAppExclusion,
-                                    onCheckedChange = {
-                                        viewModel.updateExcludeWhatsApp(it)
-                                        viewModel.rescanLibrary(context)
+                                    onCheckedChange = { viewModel.updateExcludeWhatsApp(it) }
+                                )
+
+                                val rescanOptions = listOf("Au démarrage", "Manuel")
+                                val rescanIndex = if (settings.rescanFrequency == "MANUAL") 1 else 0
+                                FuturisticChoiceRow(
+                                    title = "Fréquence d'indexation",
+                                    subtitle = "Moment où Aether analyse le stockage local pour les nouvelles musiques",
+                                    options = rescanOptions,
+                                    selectedIndex = rescanIndex,
+                                    onOptionSelected = { index ->
+                                        viewModel.updateRescanFrequency(if (index == 1) "MANUAL" else "ON_START")
                                     }
                                 )
 
-                                FuturisticSwitchRow(
-                                    title = "Exclusion des enregistrements d'appels",
-                                    subtitle = "Filtre les dossiers CallRecorder, Record, VoiceRecorder",
-                                    checked = settings.whatsAppExclusion,
-                                    onCheckedChange = {
-                                        viewModel.updateExcludeRecordings(it)
-                                        viewModel.rescanLibrary(context)
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    item {
-                        GlassCard {
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    androidx.compose.material3.Icon(
-                                        Icons.Default.Storage,
-                                        contentDescription = null,
-                                        tint = SpotifyGreen
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Indexation & Analyse Système",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = TextPrimary
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
 
                                 Button(
-                                    onClick = {
-                                        viewModel.rescanLibrary(context)
-                                        Toast.makeText(context, "Analyse de la bibliothèque lancée", Toast.LENGTH_SHORT).show()
-                                    },
+                                    onClick = { viewModel.rescanLibrary(context) },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = SpotifyGreen,
                                         contentColor = androidx.compose.ui.graphics.Color.Black
                                     ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
+                                    androidx.compose.material3.Icon(
+                                        Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
                                     Text(
-                                        text = "Forcer la réindexation complète",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                        text = "Scanner la musique maintenant",
+                                        fontWeight = FontWeight.Bold
                                     )
                                 }
                             }
@@ -308,7 +259,7 @@ fun SettingsScreen(
                 }
 
                 2 -> {
-                    // INTERFACE
+                    // 10.3 INTERFACE
                     item {
                         GlassCard {
                             Column {
@@ -320,7 +271,7 @@ fun SettingsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Thème & Style Visuel",
+                                        text = "Affichage & Fluidité",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         color = TextPrimary
                                     )
@@ -328,23 +279,46 @@ fun SettingsScreen(
 
                                 Spacer(modifier = Modifier.height(16.dp))
 
-                                val themeOptions = listOf("Dark", "OLED Noir Absolu")
-                                val themeIndex = if (settings.themePreference == "oled") 1 else 0
+                                val animOptions = listOf("Minimal", "Équilibré", "Maximum")
+                                val animIndex = when (settings.animationLevel) {
+                                    "MINIMAL" -> 0
+                                    "BALANCED" -> 1
+                                    else -> 2
+                                }
                                 FuturisticChoiceRow(
-                                    title = "Palette d'affichage",
-                                    subtitle = "Contraste et économie d'énergie écran",
-                                    options = themeOptions,
-                                    selectedIndex = themeIndex,
-                                    onOptionSelected = {
-                                        viewModel.updateThemePreference(if (it == 1) "oled" else "dark")
+                                    title = "Niveau d'animations",
+                                    subtitle = "Transitions de pochettes et pulsations dynamiques",
+                                    options = animOptions,
+                                    selectedIndex = animIndex,
+                                    onOptionSelected = { index ->
+                                        val level = when (index) {
+                                            0 -> "MINIMAL"
+                                            1 -> "BALANCED"
+                                            else -> "MAXIMUM"
+                                        }
+                                        viewModel.updateAnimationLevel(level)
                                     }
                                 )
 
-                                FuturisticSwitchRow(
-                                    title = "Animations 60/120 FPS",
-                                    subtitle = "Fluidité maximale des transitions d'interface",
-                                    checked = settings.animationLevel == "MAXIMUM",
-                                    onCheckedChange = { viewModel.updateFluidAnimations(it) }
+                                val densityOptions = listOf("Compact", "Confortable", "Spacieux")
+                                val densityIndex = when (settings.uiDensity) {
+                                    "COMPACT" -> 0
+                                    "SPACIOUS" -> 2
+                                    else -> 1
+                                }
+                                FuturisticChoiceRow(
+                                    title = "Densité d'affichage",
+                                    subtitle = "Espacement des listes et taille des lignes de morceaux",
+                                    options = densityOptions,
+                                    selectedIndex = densityIndex,
+                                    onOptionSelected = { index ->
+                                        val density = when (index) {
+                                            0 -> "COMPACT"
+                                            2 -> "SPACIOUS"
+                                            else -> "COMFORTABLE"
+                                        }
+                                        viewModel.updateUiDensity(density)
+                                    }
                                 )
                             }
                         }
@@ -352,7 +326,7 @@ fun SettingsScreen(
                 }
 
                 3 -> {
-                    // PERFORMANCE & BATTERIE
+                    // 10.4 PERFORMANCE
                     item {
                         GlassCard {
                             Column {
@@ -364,7 +338,7 @@ fun SettingsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Optimisation Énergétique",
+                                        text = "Optimisation & Batterie",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         color = TextPrimary
                                     )
@@ -373,17 +347,17 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
 
                                 FuturisticSwitchRow(
-                                    title = "Mode Économie de Batterie",
-                                    subtitle = "Désactive le visualiseur dynamique lorsque la batterie est basse",
+                                    title = "Mode économie d'énergie",
+                                    subtitle = "Désactive les effets visuels et réduit l'utilisation processeur",
                                     checked = settings.batterySaverMode,
                                     onCheckedChange = { viewModel.updateBatterySaverMode(it) }
                                 )
 
                                 FuturisticSwitchRow(
-                                    title = "Persistance en Arrière-plan",
-                                    subtitle = "Maintient le service audio actif pour une reprise instantanée",
-                                    checked = settings.autoResumePosition,
-                                    onCheckedChange = { viewModel.updateBackgroundPersistence(it) }
+                                    title = "Visualiseur décoratif",
+                                    subtitle = "Affiche les barres spectrales réactives sur le lecteur plein écran",
+                                    checked = settings.visualizerEnabled,
+                                    onCheckedChange = { viewModel.updateVisualizerEnabled(it) }
                                 )
                             }
                         }
@@ -391,7 +365,53 @@ fun SettingsScreen(
                 }
 
                 4 -> {
-                    // AVANCÉ & RÉINITIALISATION
+                    // 10.5 AVANCÉ
+                    item {
+                        GlassCard {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    androidx.compose.material3.Icon(
+                                        Icons.Default.Storage,
+                                        contentDescription = null,
+                                        tint = SpotifyGreen
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Données & Réinitialisation",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = TextPrimary
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Button(
+                                    onClick = { viewModel.resetPlaybackSession(context) },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = androidx.compose.ui.graphics.Color(0xFF27273A),
+                                        contentColor = TextPrimary
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Réinitialiser la session de lecture")
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Button(
+                                    onClick = { showResetDbDialog = true },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = androidx.compose.ui.graphics.Color(0xFF7F1D1D),
+                                        contentColor = androidx.compose.ui.graphics.Color.White
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Effacer la base de données locale")
+                                }
+                            }
+                        }
+                    }
+
                     item {
                         GlassCard {
                             Column {
@@ -403,36 +423,20 @@ fun SettingsScreen(
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Architecture & Déclaration",
+                                        text = "À propos d'Aether",
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                         color = TextPrimary
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(16.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
 
                                 Text(
-                                    text = "Ce lecteur est 100% autonome, zéro IA générative, zéro fuite de données privées. Aucun fichier audio de démonstration n'est injecté.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary
+                                    text = "Version 2.0 (Build 2)\nLecteur 100% Local • AndroidX Media3 ExoPlayer\nAucune IA • Aucune télémétrie distante",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextSecondary,
+                                    lineHeight = 20.sp
                                 )
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                Button(
-                                    onClick = { showResetDialog = true },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = SpotifySurfaceHighlight,
-                                        contentColor = androidx.compose.ui.graphics.Color(0xFFFF5252)
-                                    ),
-                                    shape = RoundedCornerShape(10.dp),
-                                    modifier = Modifier.fillMaxWidth().height(48.dp)
-                                ) {
-                                    Text(
-                                        text = "Réinitialiser tous les paramètres",
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                }
                             }
                         }
                     }
@@ -441,40 +445,36 @@ fun SettingsScreen(
         }
     }
 
-    if (showResetDialog) {
+    if (showResetDbDialog) {
         AlertDialog(
-            onDismissRequest = { showResetDialog = false },
-            title = {
-                Text(
-                    text = "Réinitialiser les paramètres ?",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = TextPrimary
-                )
-            },
+            onDismissRequest = { showResetDbDialog = false },
+            title = { Text("Effacer la bibliothèque ?", color = TextPrimary) },
             text = {
                 Text(
-                    text = "Tous vos réglages personnalisés (égaliseur, crossfade, filtres de dossiers) seront remis à zéro.",
-                    style = MaterialTheme.typography.bodyMedium,
+                    "Cette action supprime la base locale et l'historique d'écoute. Vos fichiers audio sur le disque ne seront pas effacés.",
                     color = TextSecondary
                 )
             },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
-                        viewModel.resetSettings()
-                        showResetDialog = false
-                        Toast.makeText(context, "Paramètres réinitialisés", Toast.LENGTH_SHORT).show()
-                    }
+                        showResetDbDialog = false
+                        viewModel.resetAllData(context)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = androidx.compose.ui.graphics.Color(0xFFDC2626),
+                        contentColor = androidx.compose.ui.graphics.Color.White
+                    )
                 ) {
-                    Text("Réinitialiser", color = androidx.compose.ui.graphics.Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                    Text("Effacer")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showResetDialog = false }) {
+                TextButton(onClick = { showResetDbDialog = false }) {
                     Text("Annuler", color = TextSecondary)
                 }
             },
-            containerColor = SpotifyDarkSurface
+            containerColor = SpotifyBlack
         )
     }
 }
