@@ -8,8 +8,6 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
-import android.media.audiofx.Equalizer
-import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -94,9 +92,6 @@ class AetherPlayerEngine(
 
     private var activePlayer: MediaPlayer? = null
     private var fadingOutPlayer: MediaPlayer? = null
-
-    private var equalizer: Equalizer? = null
-    private var loudnessEnhancer: LoudnessEnhancer? = null
 
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var audioFocusRequest: AudioFocusRequest? = null
@@ -258,14 +253,7 @@ class AetherPlayerEngine(
 
         if (!requestAudioFocus()) return
 
-        val crossfadeEnabled = currentSettings.crossfadeEnabled
-        val crossfadeDuration = (currentSettings.crossfadeDuration * 1000).toInt()
-
-        if (crossfadeEnabled && activePlayer != null && activePlayer?.isPlaying == true && crossfadeDuration > 0) {
-            performCrossfade(targetTrack, startPosition, crossfadeDuration)
-        } else {
-            startFreshPlayback(targetTrack, startPosition)
-        }
+        startFreshPlayback(targetTrack, startPosition)
 
         _playbackState.value = _playbackState.value.copy(
             currentTrack = targetTrack,
@@ -283,7 +271,14 @@ class AetherPlayerEngine(
     }
 
     private fun startFreshPlayback(track: Track, positionMs: Long) {
-        releasePlayer(activePlayer)
+        val old = activePlayer
+        activePlayer = null
+        releasePlayer(old)
+
+        val fading = fadingOutPlayer
+        fadingOutPlayer = null
+        releasePlayer(fading)
+
         try {
             val player = MediaPlayer().apply {
                 setAudioAttributes(
@@ -293,6 +288,10 @@ class AetherPlayerEngine(
                         .build()
                 )
                 setDataSource(context, track.uri)
+                setOnErrorListener { _, _, _ ->
+                    _playbackState.value = _playbackState.value.copy(isPlaying = false)
+                    true
+                }
                 prepare()
                 if (positionMs > 0 && positionMs < duration) {
                     seekTo(positionMs.toInt())
@@ -304,58 +303,9 @@ class AetherPlayerEngine(
                 }
             }
             activePlayer = player
-            attachAudioEffects(player.audioSessionId)
         } catch (e: Exception) {
             e.printStackTrace()
             _playbackState.value = _playbackState.value.copy(isPlaying = false)
-        }
-    }
-
-    private fun performCrossfade(newTrack: Track, positionMs: Long, durationMs: Int) {
-        val oldPlayer = activePlayer
-        fadingOutPlayer = oldPlayer
-
-        try {
-            val newPlayer = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .build()
-                )
-                setDataSource(context, newTrack.uri)
-                prepare()
-                if (positionMs > 0 && positionMs < duration) {
-                    seekTo(positionMs.toInt())
-                }
-                setVolume(0.0f, 0.0f)
-                start()
-                setOnCompletionListener {
-                    handleTrackCompletion()
-                }
-            }
-            activePlayer = newPlayer
-            attachAudioEffects(newPlayer.audioSessionId)
-
-            // Crossfade volume ramping
-            scope.launch {
-                val steps = 30
-                val intervalMs = (durationMs / steps).toLong().coerceAtLeast(10L)
-                for (i in 0..steps) {
-                    val progress = i.toFloat() / steps.toFloat()
-                    val inVolume = sin(progress * (Math.PI / 2)).toFloat()
-                    val outVolume = cos(progress * (Math.PI / 2)).toFloat()
-
-                    newPlayer.setVolume(inVolume, inVolume)
-                    oldPlayer?.setVolume(outVolume, outVolume)
-                    delay(intervalMs)
-                }
-                releasePlayer(oldPlayer)
-                fadingOutPlayer = null
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            startFreshPlayback(newTrack, positionMs)
         }
     }
 
@@ -505,21 +455,21 @@ class AetherPlayerEngine(
     }
 
     private fun handleTrackCompletion() {
-        val state = _playbackState.value
-        when (state.repeatMode) {
-            RepeatMode.ONE -> {
-                seekTo(0L)
-                play()
-            }
-            RepeatMode.ALL -> {
-                next()
-            }
-            else -> {
-                if (state.currentQueueIndex < state.queue.lastIndex) {
-                    next()
-                } else {
-                    pause()
+        Handler(Looper.getMainLooper()).post {
+            val state = _playbackState.value
+            when (state.repeatMode) {
+                RepeatMode.ONE -> {
                     seekTo(0L)
+                    play()
+                }
+                RepeatMode.ALL -> next()
+                else -> {
+                    if (state.currentQueueIndex < state.queue.lastIndex) {
+                        next()
+                    } else {
+                        pause()
+                        seekTo(0L)
+                    }
                 }
             }
         }
@@ -578,58 +528,8 @@ class AetherPlayerEngine(
         _playbackState.value = _playbackState.value.copy(visualizerFrequencies = FloatArray(32) { 0f })
     }
 
-    private fun attachAudioEffects(audioSessionId: Int) {
-        try {
-            equalizer?.release()
-            equalizer = Equalizer(0, audioSessionId).apply {
-                enabled = true
-            }
-            loudnessEnhancer?.release()
-            loudnessEnhancer = LoudnessEnhancer(audioSessionId).apply {
-                enabled = currentSettings.loudnessNormalized
-                if (enabled) {
-                    setTargetGain((currentSettings.loudnessGain * 100).toInt())
-                }
-            }
-            applyEqualizerPreset(currentSettings.equalizerPreset)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun applyEqualizerPreset(presetIndex: Int) {
-        val eq = equalizer ?: return
-        try {
-            val numBands = eq.numberOfBands.toInt()
-            val minBandLevel = eq.bandLevelRange[0]
-            val maxBandLevel = eq.bandLevelRange[1]
-            val midLevel = 0.toShort()
-
-            val gains: List<Short> = when (presetIndex) {
-                1 -> listOf((maxBandLevel * 0.8f).toInt().toShort(), (maxBandLevel * 0.4f).toInt().toShort(), midLevel, midLevel, midLevel) // Bass Boost
-                2 -> listOf((maxBandLevel * 0.6f).toInt().toShort(), midLevel, (maxBandLevel * 0.5f).toInt().toShort(), midLevel, (maxBandLevel * 0.7f).toInt().toShort()) // Cyber Synth / Electronic
-                3 -> listOf(midLevel, midLevel, (maxBandLevel * 0.7f).toInt().toShort(), (maxBandLevel * 0.4f).toInt().toShort(), midLevel) // Vocal
-                4 -> listOf((maxBandLevel * 0.6f).toInt().toShort(), midLevel, (maxBandLevel * 0.5f).toInt().toShort(), (maxBandLevel * 0.6f).toInt().toShort(), (maxBandLevel * 0.4f).toInt().toShort()) // Rock
-                else -> listOf(midLevel, midLevel, midLevel, midLevel, midLevel) // Flat
-            }
-
-            for (i in 0 until numBands) {
-                val gain = if (i < gains.size) gains[i] else midLevel
-                eq.setBandLevel(i.toShort(), gain)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
     private fun applySettings(settings: AetherSettings) {
-        applyEqualizerPreset(settings.equalizerPreset)
-        loudnessEnhancer?.apply {
-            enabled = settings.loudnessNormalized
-            if (enabled) {
-                setTargetGain((settings.loudnessGain * 100).toInt())
-            }
-        }
+        currentSettings = settings
     }
 
     private fun requestAudioFocus(): Boolean {
@@ -647,8 +547,9 @@ class AetherPlayerEngine(
                         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> pause()
                         AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> activePlayer?.setVolume(0.2f, 0.2f)
                         AudioManager.AUDIOFOCUS_GAIN -> {
-                            activePlayer?.setVolume(1.0f, 1.0f)
-                            play()
+                            try {
+                                activePlayer?.setVolume(1.0f, 1.0f)
+                            } catch (_: Exception) { }
                         }
                     }
                 }
@@ -668,12 +569,29 @@ class AetherPlayerEngine(
     }
 
     private fun releasePlayer(player: MediaPlayer?) {
+        if (player == null) return
+
         try {
-            player?.stop()
-            player?.release()
-        } catch (e: Exception) {
-            e.printStackTrace()
+            player.setOnCompletionListener(null)
+            player.setOnErrorListener(null)
+            player.setOnPreparedListener(null)
+        } catch (_: Exception) { }
+
+        try {
+            if (player.isPlaying) {
+                player.stop()
+            }
+        } catch (_: Exception) {
+            // Piste déjà terminée : on ignore
         }
+
+        try {
+            player.reset()
+        } catch (_: Exception) { }
+
+        try {
+            player.release()
+        } catch (_: Exception) { }
     }
 
     private fun saveSessionState() {
