@@ -74,7 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
-import com.example.player.RepeatMode
+import com.example.playback.RepeatMode
 import com.example.ui.components.FuturisticBadge
 import com.example.ui.theme.SpotifyBlack
 import com.example.ui.theme.SpotifyDarkSurface

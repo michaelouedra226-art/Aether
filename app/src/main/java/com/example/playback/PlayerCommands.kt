@@ -1,0 +1,32 @@
+package com.example.playback
+
+object PlayerCommands {
+    const val ACTION_PLAY_QUEUE = "com.example.playback.ACTION_PLAY_QUEUE"
+    const val ACTION_PLAY = "com.example.playback.ACTION_PLAY"
+    const val ACTION_PAUSE = "com.example.playback.ACTION_PAUSE"
+    const val ACTION_TOGGLE_PLAY_PAUSE = "com.example.playback.ACTION_TOGGLE_PLAY_PAUSE"
+    const val ACTION_NEXT = "com.example.playback.ACTION_NEXT"
+    const val ACTION_PREV = "com.example.playback.ACTION_PREV"
+    const val ACTION_SEEK = "com.example.playback.ACTION_SEEK"
+    const val ACTION_SEEK_TO_INDEX = "com.example.playback.ACTION_SEEK_TO_INDEX"
+    const val ACTION_STOP = "com.example.playback.ACTION_STOP"
+    const val ACTION_SET_SHUFFLE = "com.example.playback.ACTION_SET_SHUFFLE"
+    const val ACTION_SET_REPEAT = "com.example.playback.ACTION_SET_REPEAT"
+    const val ACTION_SET_SPEED = "com.example.playback.ACTION_SET_SPEED"
+    const val ACTION_ADD_TO_QUEUE = "com.example.playback.ACTION_ADD_TO_QUEUE"
+    const val ACTION_PLAY_NEXT = "com.example.playback.ACTION_PLAY_NEXT"
+    const val ACTION_REMOVE_QUEUE_INDEX = "com.example.playback.ACTION_REMOVE_QUEUE_INDEX"
+    const val ACTION_REORDER_QUEUE = "com.example.playback.ACTION_REORDER_QUEUE"
+    const val ACTION_CLEAR_QUEUE = "com.example.playback.ACTION_CLEAR_QUEUE"
+
+    const val EXTRA_TRACK_IDS = "extra_track_ids"
+    const val EXTRA_START_INDEX = "extra_start_index"
+    const val EXTRA_POSITION_MS = "extra_position_ms"
+    const val EXTRA_SHUFFLE_ENABLED = "extra_shuffle_enabled"
+    const val EXTRA_REPEAT_MODE = "extra_repeat_mode"
+    const val EXTRA_SPEED = "extra_speed"
+    const val EXTRA_TRACK_ID = "extra_track_id"
+    const val EXTRA_FROM_INDEX = "extra_from_index"
+    const val EXTRA_TO_INDEX = "extra_to_index"
+    const val EXTRA_REMOVE_INDEX = "extra_remove_index"
+}

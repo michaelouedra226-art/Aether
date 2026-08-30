@@ -11,8 +11,9 @@ import com.example.data.preferences.AetherSettings
 import com.example.data.repository.AlbumGroup
 import com.example.data.repository.ArtistGroup
 import com.example.data.repository.FolderGroup
-import com.example.player.PlaybackState
-import com.example.service.MusicPlaybackService
+import com.example.playback.PlaybackState
+import com.example.playback.PlayerConnector
+import com.example.playback.RepeatMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,10 +27,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val app = application as AetherApp
     private val audioRepository = app.audioRepository
-    private val playerEngine = app.playerEngine
+    private val playerConnector: PlayerConnector = app.playerConnector
     private val settingsManager = app.settingsManager
 
-    val playbackState: StateFlow<PlaybackState> = playerEngine.playbackState
+    val playbackState: StateFlow<PlaybackState> = playerConnector.playbackState
 
     val settings: StateFlow<AetherSettings> = settingsManager.settingsFlow.stateIn(
         scope = viewModelScope,
@@ -139,93 +140,76 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playTrack(track: Track, tracks: List<Track> = emptyList()) {
         if (tracks.isNotEmpty()) {
             val index = tracks.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-            playerEngine.playTrackList(tracks, index)
+            playerConnector.playQueue(tracks, index)
         } else {
-            playerEngine.playTrack(track)
+            playerConnector.playTrack(track)
         }
-        MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
     }
 
     fun playTrackList(tracks: List<Track>, index: Int = 0) {
-        playerEngine.playTrackList(tracks, index)
-        MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
+        playerConnector.playQueue(tracks, index)
     }
 
     fun playTrackAtIndex(index: Int) {
-        playerEngine.playQueueIndex(index)
-        MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
+        playerConnector.playQueueIndex(index)
     }
 
     fun playNext(track: Track) {
-        playerEngine.playNext(track)
+        playerConnector.playNext(track)
     }
 
     fun addToQueue(track: Track) {
-        playerEngine.addToQueue(track)
+        playerConnector.addToQueue(track)
     }
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
-        playerEngine.setQueue(
-            playerEngine.playbackState.value.queue.toMutableList().apply {
-                if (fromIndex in indices && toIndex in indices) {
-                    val item = removeAt(fromIndex)
-                    add(toIndex, item)
-                }
-            },
-            playerEngine.playbackState.value.currentQueueIndex
-        )
+        playerConnector.reorderQueue(fromIndex, toIndex)
     }
 
     fun removeFromQueue(index: Int) {
-        playerEngine.removeQueueItem(index)
+        playerConnector.removeQueueItem(index)
     }
 
     fun clearQueue() {
-        playerEngine.setQueue(emptyList(), 0)
-        playerEngine.pause()
+        playerConnector.clearQueue()
     }
 
     fun shuffleAll(tracks: List<Track>) {
         if (tracks.isEmpty()) return
-        val shuffled = tracks.shuffled()
-        playerEngine.setShuffle(true)
-        playerEngine.playTrackList(shuffled, 0)
-        MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
+        playerConnector.setShuffle(true)
+        playerConnector.playQueue(tracks.shuffled(), 0)
     }
 
     fun togglePlayPause() {
-        playerEngine.togglePlayPause()
-        if (playerEngine.playbackState.value.isPlaying) {
-            MusicPlaybackService.startService(app, MusicPlaybackService.ACTION_PLAY)
-        }
+        playerConnector.togglePlayPause()
     }
 
     fun next() {
-        playerEngine.next()
+        playerConnector.next()
     }
 
     fun previous() {
-        playerEngine.previous()
+        playerConnector.previous()
     }
 
     fun seekTo(positionMs: Long) {
-        playerEngine.seekTo(positionMs)
+        playerConnector.seekTo(positionMs)
     }
 
     fun setShuffle(enabled: Boolean) {
-        playerEngine.setShuffle(enabled)
+        playerConnector.setShuffle(enabled)
     }
 
     fun toggleShuffle() {
-        playerEngine.setShuffle(!playerEngine.playbackState.value.isShuffle)
+        playerConnector.toggleShuffle()
     }
 
     fun toggleRepeat() {
-        playerEngine.toggleRepeatMode()
+        playerConnector.toggleRepeatMode()
     }
 
     fun setPlaybackSpeed(speed: Float) {
-        playerEngine.setPlaybackSpeed(speed)
+        playerConnector.setPlaybackSpeed(speed)
     }
 
     fun rescanLibrary(context: Context) {
@@ -308,9 +292,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetAllData(context: Context) {
         viewModelScope.launch {
+            playerConnector.stop()
             audioRepository.clearAllData()
-            playerEngine.pause()
-            MusicPlaybackService.stopService(context)
             Toast.makeText(context, "Bibliothèque réinitialisée", Toast.LENGTH_SHORT).show()
         }
     }
@@ -324,9 +307,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val delay = settings.value.doubleBackExitDelayMs
 
         if (currentTime - lastBackPressTime < delay) {
-            // Second press within delay window -> Exit app and dismiss notification!
-            MusicPlaybackService.stopService(context)
-            playerEngine.pause()
+            // Second press within delay window -> Clean stop and exit!
+            playerConnector.stop()
             onExitApp()
             return true
         } else {

@@ -8,7 +8,7 @@ import com.example.data.local.AppDatabase
 import com.example.data.preferences.SettingsManager
 import com.example.data.repository.AudioRepository
 import com.example.data.scanner.MediaScanner
-import com.example.player.AetherPlayerEngine
+import com.example.playback.PlayerConnector
 
 class AetherApp : Application() {
 
@@ -24,7 +24,7 @@ class AetherApp : Application() {
     lateinit var audioRepository: AudioRepository
         private set
 
-    lateinit var playerEngine: AetherPlayerEngine
+    lateinit var playerConnector: PlayerConnector
         private set
 
     override fun onCreate() {
@@ -37,7 +37,7 @@ class AetherApp : Application() {
         settingsManager = SettingsManager(this)
         mediaScanner = MediaScanner(this)
         audioRepository = AudioRepository(database, mediaScanner, settingsManager)
-        playerEngine = AetherPlayerEngine(this, audioRepository, settingsManager)
+        playerConnector = PlayerConnector(this)
     }
 
     private fun createNotificationChannel() {
