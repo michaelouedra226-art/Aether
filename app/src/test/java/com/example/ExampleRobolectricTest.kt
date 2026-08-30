@@ -28,12 +28,12 @@ class ExampleRobolectricTest {
         val scanner = MediaScanner(context)
 
         // WhatsApp voice notes and audio paths
-        assertTrue(scanner.isWhatsAppAudio("/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio/AUD-20240101-WA0001.mp3", "AUD-20240101-WA0001.mp3", 4000L))
-        assertTrue(scanner.isWhatsAppAudio("/storage/emulated/0/WhatsApp/Media/WhatsApp Voice Notes/PTT-20240210-WA0002.opus", "PTT-20240210-WA0002.opus", 12000L))
-        assertTrue(scanner.isWhatsAppAudio("/storage/emulated/0/Music/AUD-20240315-WA0003.m4a", "AUD-20240315-WA0003.m4a", 15000L))
+        assertTrue(MediaScanner.isWhatsAppAudio("/storage/emulated/0/Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Audio/AUD-20240101-WA0001.mp3", "AUD-20240101-WA0001.mp3", "WhatsApp Audio"))
+        assertTrue(MediaScanner.isWhatsAppAudio("/storage/emulated/0/WhatsApp/Media/WhatsApp Voice Notes/PTT-20240210-WA0002.opus", "PTT-20240210-WA0002.opus", "WhatsApp Voice Notes"))
+        assertTrue(MediaScanner.isWhatsAppAudio("/storage/emulated/0/Music/AUD-20240315-WA0003.m4a", "AUD-20240315-WA0003.m4a", "Music"))
 
         // Legitimate music tracks
-        assertFalse(scanner.isWhatsAppAudio("/storage/emulated/0/Music/Daft Punk/Discovery/01 One More Time.flac", "01 One More Time.flac", 320000L))
-        assertFalse(scanner.isWhatsAppAudio("/storage/emulated/0/Download/Cyberpunk_Soundtrack.mp3", "Cyberpunk_Soundtrack.mp3", 240000L))
+        assertFalse(MediaScanner.isWhatsAppAudio("/storage/emulated/0/Music/Daft Punk/Discovery/01 One More Time.flac", "01 One More Time.flac", "Discovery"))
+        assertFalse(MediaScanner.isWhatsAppAudio("/storage/emulated/0/Download/Cyberpunk_Soundtrack.mp3", "Cyberpunk_Soundtrack.mp3", "Download"))
     }
 }

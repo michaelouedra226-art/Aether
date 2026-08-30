@@ -31,6 +31,7 @@ import com.example.data.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -43,17 +44,24 @@ class MusicPlaybackService : MediaSessionService() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
     private var positionTickerJob: Job? = null
+    private var notificationJob: Job? = null
 
     private var exoPlayer: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
 
     private var currentTracks: MutableList<Track> = mutableListOf()
     private var lastSavedTrackId: Long? = null
+    private var lastSavedPositionTime = 0L
+
+    // Bitmap cache for notification to prevent OOM & allocation churn
+    private var cachedAlbumId: Long? = null
+    private var cachedBitmap: Bitmap? = null
 
     companion object {
         const val TAG = "MusicPlaybackService"
         const val NOTIFICATION_ID = 1001
         const val CHANNEL_ID = "aether_playback_channel"
+        private const val MAX_ART_DIMENSION = 192
     }
 
     override fun onCreate() {
@@ -103,6 +111,8 @@ class MusicPlaybackService : MediaSessionService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 updateFullState()
                 updateNotification()
+                // Persist session change on real track transition
+                saveSessionStateNow()
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -112,6 +122,7 @@ class MusicPlaybackService : MediaSessionService() {
                     startPositionTicker()
                 } else {
                     stopPositionTicker()
+                    saveSessionStateNow()
                 }
             }
 
@@ -366,7 +377,7 @@ class MusicPlaybackService : MediaSessionService() {
                 val dur = exoPlayer?.duration?.takeIf { it > 0 } ?: 0L
                 AetherApp.instance.playerConnector.updatePosition(pos, dur)
 
-                // Generate pleasant visualizer waves for UI
+                // Generate pleasant visualizer waves for UI only if active
                 step++
                 val freqs = List(8) { i ->
                     val s = sin((step * 0.35f + i * 0.8f).toDouble()).toFloat()
@@ -374,33 +385,47 @@ class MusicPlaybackService : MediaSessionService() {
                 }
                 AetherApp.instance.playerConnector.updateFrequencies(freqs)
 
-                // Save session position every ~3 seconds
-                if (step % 6 == 0) {
-                    val curTrack = getCurrentTrack()
-                    if (curTrack != null && curTrack.id != lastSavedTrackId) {
-                        lastSavedTrackId = curTrack.id
-                        AetherApp.instance.audioRepository.recordPlaybackHistory(curTrack.id, pos)
-                    }
-                    if (curTrack != null) {
-                        val shuffle = exoPlayer?.shuffleModeEnabled ?: false
-                        val rep = when (exoPlayer?.repeatMode) {
-                            Player.REPEAT_MODE_ALL -> "ALL"
-                            Player.REPEAT_MODE_ONE -> "ONE"
-                            else -> "OFF"
-                        }
-                        AetherApp.instance.settingsManager.savePlaybackState(
-                            trackId = curTrack.id,
-                            positionMs = pos,
-                            queueIds = currentTracks.map { it.id },
-                            queueIndex = exoPlayer?.currentMediaItemIndex ?: 0,
-                            shuffle = shuffle,
-                            repeat = rep
-                        )
-                    }
+                // Save session position every 10 seconds to avoid DataStore disk thrashing
+                val now = System.currentTimeMillis()
+                if (now - lastSavedPositionTime > 10000L) {
+                    lastSavedPositionTime = now
+                    saveSessionStateNow()
                 }
 
                 delay(500)
             }
+        }
+    }
+
+    private fun saveSessionStateNow() {
+        val curTrack = getCurrentTrack() ?: return
+        val pos = exoPlayer?.currentPosition ?: 0L
+        val shuffle = exoPlayer?.shuffleModeEnabled ?: false
+        val rep = when (exoPlayer?.repeatMode) {
+            Player.REPEAT_MODE_ALL -> "ALL"
+            Player.REPEAT_MODE_ONE -> "ONE"
+            else -> "OFF"
+        }
+        val qIndex = exoPlayer?.currentMediaItemIndex ?: 0
+        val qIds = currentTracks.map { it.id }
+
+        val needHistoryRecord = curTrack.id != lastSavedTrackId
+        if (needHistoryRecord) {
+            lastSavedTrackId = curTrack.id
+        }
+
+        serviceScope.launch(Dispatchers.IO) {
+            if (needHistoryRecord) {
+                AetherApp.instance.audioRepository.recordPlaybackHistory(curTrack.id, pos)
+            }
+            AetherApp.instance.settingsManager.savePlaybackState(
+                trackId = curTrack.id,
+                positionMs = pos,
+                queueIds = qIds,
+                queueIndex = qIndex,
+                shuffle = shuffle,
+                repeat = rep
+            )
         }
     }
 
@@ -454,10 +479,14 @@ class MusicPlaybackService : MediaSessionService() {
         val track = getCurrentTrack() ?: return
         val isPlaying = exoPlayer?.isPlaying == true
 
-        serviceScope.launch {
+        // Cancel previous notification decode coroutine to avoid accumulation
+        notificationJob?.cancel()
+        notificationJob = serviceScope.launch {
             val albumBitmap = withContext(Dispatchers.IO) {
                 loadAlbumArtBitmap(track.albumId)
             }
+
+            if (!isActive) return@launch
 
             val contentIntent = PendingIntent.getActivity(
                 this@MusicPlaybackService,
@@ -549,19 +578,41 @@ class MusicPlaybackService : MediaSessionService() {
             .build()
     }
 
+    /**
+     * Memory-safe artwork decoder:
+     * - Reuses cached bitmap if album ID is unchanged
+     * - Downsamples using inSampleSize and RGB_565 config (50% memory savings)
+     * - Limits resolution strictly to 192x192
+     */
     private fun loadAlbumArtBitmap(albumId: Long): Bitmap? {
+        if (albumId == cachedAlbumId && cachedBitmap != null && !cachedBitmap!!.isRecycled) {
+            return cachedBitmap
+        }
+
         return try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val artworkUri = ContentUris.withAppendedId(
                     Uri.parse("content://media/external/audio/albumart"),
                     albumId
                 )
-                contentResolver.loadThumbnail(artworkUri, Size(256, 256), null)
+                contentResolver.loadThumbnail(artworkUri, Size(MAX_ART_DIMENSION, MAX_ART_DIMENSION), null)
             } else {
                 val artworkUri = Uri.parse("content://media/external/audio/albumart/$albumId")
-                val stream = contentResolver.openInputStream(artworkUri)
-                stream?.use { BitmapFactory.decodeStream(it) }
+                contentResolver.openInputStream(artworkUri)?.use { stream ->
+                    // First decode dimensions
+                    val options = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                        inSampleSize = 2 // Half resolution minimum
+                    }
+                    BitmapFactory.decodeStream(stream, null, options)
+                }
             }
+
+            if (bitmap != null) {
+                cachedAlbumId = albumId
+                cachedBitmap = bitmap
+            }
+            bitmap
         } catch (e: Exception) {
             null
         }
@@ -570,12 +621,20 @@ class MusicPlaybackService : MediaSessionService() {
     private fun performCleanShutdown() {
         try {
             stopPositionTicker()
+            notificationJob?.cancel()
+            notificationJob = null
+            serviceScope.coroutineContext.cancelChildren()
+
             exoPlayer?.stop()
             exoPlayer?.release()
             exoPlayer = null
             mediaSession?.release()
             mediaSession = null
             currentTracks.clear()
+
+            cachedBitmap = null
+            cachedAlbumId = null
+
             AetherApp.instance.playerConnector.updateServiceState(PlaybackState())
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
